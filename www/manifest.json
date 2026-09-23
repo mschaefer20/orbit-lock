@@ -1,0 +1,10 @@
+{
+  "name": "Orbit Lock",
+  "short_name": "Orbit Lock",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05060f",
+  "theme_color": "#05060f",
+  "icons": []
+}

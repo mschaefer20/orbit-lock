@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05060f" />
+  <meta name="description" content="Orbit Lock — a one-button gravity puzzle. Flip which planet pulls you and reach the ring in as few taps as you can." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <title>Orbit Lock</title>
+</head>
+<body>
+  <div id="app">
+    <header class="hud">
+      <button class="icon-btn" id="btn-levels" aria-label="Levels" title="Levels">&#9776;</button>
+      <div class="hud-mid">
+        <span id="hud-level" class="label">Level 1</span>
+        <span id="hud-name" class="value">Drop</span>
+      </div>
+      <div class="hud-right">
+        <div id="pips" class="pips" aria-label="Taps left"></div>
+        <button class="icon-btn" id="btn-restart" aria-label="Restart" title="Restart">&#8635;</button>
+      </div>
+    </header>
+
+    <div class="board-wrap">
+      <canvas id="board" width="420" height="640" aria-label="Game board"></canvas>
+
+      <!-- Title -->
+      <section id="screen-title" class="screen">
+        <h2 class="logo">ORBIT<br>LOCK</h2>
+        <p class="tagline">One button. Every planet.</p>
+        <button class="btn" data-action="play">Play</button>
+        <button class="btn ghost" data-action="levels">Levels</button>
+        <button class="btn ghost" data-action="howto">How to Play</button>
+      </section>
+
+      <!-- How to play -->
+      <section id="screen-howto" class="screen hidden">
+        <h2>How to Play</h2>
+        <ul class="howto">
+          <li><b>Tap</b> to launch the orb.</li>
+          <li><b>Tap</b> again to switch the pull to the <b>next planet</b> (the one with the dashed ring).</li>
+          <li>Reach the <b>gold ring</b>.</li>
+          <li>Planets, walls and the edge of space are all fatal.</li>
+          <li>Fewer taps = more stars. Your last attempt is drawn as a ghost trail.</li>
+        </ul>
+        <button class="btn" data-action="back">Back</button>
+      </section>
+
+      <!-- Level select -->
+      <section id="screen-levels" class="screen hidden">
+        <h2>Levels</h2>
+        <p id="levels-summary" class="tagline"></p>
+        <div id="level-grid" class="level-grid"></div>
+        <button class="btn ghost" data-action="back">Back</button>
+      </section>
+
+      <!-- Win -->
+      <section id="screen-win" class="screen hidden">
+        <h2>Orbit Locked</h2>
+        <div id="win-stars" class="stars"></div>
+        <p id="win-text" class="tagline"></p>
+        <button class="btn" data-action="next">Next</button>
+        <button class="btn ghost" data-action="retry">Retry</button>
+        <button class="btn ghost" data-action="levels">Levels</button>
+      </section>
+    </div>
+
+    <p class="footer-hint" id="footer-hint">Tap to launch</p>
+  </div>
+
+  <script src="physics.js"></script>
+  <script src="levels.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

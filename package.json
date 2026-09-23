@@ -1,0 +1,27 @@
+{
+  "name": "orbit-lock",
+  "version": "1.0.0",
+  "description": "Orbit Lock — a one-button gravity puzzle.",
+  "private": true,
+  "scripts": {
+    "serve": "http-server www -p 8000 -c-1",
+    "levels": "node tools/gen.js",
+    "verify": "node tools/solve.js",
+    "sync": "cap sync",
+    "ios": "cap open ios",
+    "assets": "capacitor-assets generate --ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/haptics": "^6.0.2",
+    "@capacitor/splash-screen": "^6.0.3",
+    "@capacitor/status-bar": "^6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/assets": "^3.0.5",
+    "http-server": "^14.1.1",
+    "xcode": "^3.0.1"
+  }
+}

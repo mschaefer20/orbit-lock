@@ -1,0 +1,161 @@
+:root {
+  --bg: #05060f;
+  --panel: #0b0e22;
+  --p0: #ff5e7e;
+  --p1: #4dd2ff;
+  --p2: #b48cff;
+  --p3: #7dffa0;
+  --gold: #ffd84d;
+  --text: #eef0ff;
+  --muted: #7d82ad;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+}
+
+.hud {
+  width: min(94vw, 420px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.hud-mid { display: flex; flex-direction: column; align-items: center; }
+.hud-right { display: flex; align-items: center; gap: 10px; }
+.label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.value { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+
+.icon-btn {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  border: 1px solid #1c2147;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+}
+.icon-btn:active { transform: scale(0.94); }
+
+.pips { display: flex; gap: 5px; }
+.pip {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: transparent;
+  transition: background 0.15s, transform 0.15s;
+}
+.pip.on { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.pip.spent { transform: scale(0.7); opacity: 0.45; }
+
+.board-wrap {
+  position: relative;
+  width: min(94vw, 420px, calc((100vh - 120px) * 420 / 640));
+  aspect-ratio: 420 / 640;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px #151a3a, 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+canvas { display: block; width: 100%; height: 100%; }
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(5, 6, 15, 0.86);
+  backdrop-filter: blur(6px);
+  text-align: center;
+}
+.screen.hidden { display: none; }
+.screen h2 { font-size: 26px; letter-spacing: 4px; text-transform: uppercase; }
+.logo {
+  font-size: 52px !important;
+  line-height: 1;
+  letter-spacing: 10px !important;
+  font-weight: 900;
+  background: linear-gradient(90deg, var(--p0), var(--p1));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.tagline { color: var(--muted); font-size: 14px; }
+.howto { list-style: none; text-align: left; color: var(--muted); display: flex; flex-direction: column; gap: 8px; font-size: 14px; max-width: 300px; }
+.howto b { color: var(--text); }
+
+.btn {
+  min-width: 180px;
+  padding: 12px 22px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(90deg, var(--p0), var(--p1));
+  color: #05060f;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid #2a2f5a; font-weight: 600; }
+.btn:active { transform: scale(0.97); }
+.btn[disabled] { opacity: 0.35; }
+
+#screen-levels { justify-content: flex-start; padding-top: 22px; }
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 340px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  padding: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.lvl {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px solid #2a2f5a;
+  background: var(--panel);
+  color: var(--text);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.lvl small { font-size: 9px; color: var(--gold); letter-spacing: 0; min-height: 11px; }
+.lvl.locked { opacity: 0.3; }
+
+.stars { font-size: 34px; letter-spacing: 6px; color: var(--gold); }
+.stars .off { color: #2a2f5a; }
+
+.footer-hint { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; min-height: 16px; }

@@ -1,0 +1,85 @@
+/* Renders each level + the solver's min-tap trajectory to tools/out/NN.png
+   (pure Node, no deps). Usage: node tools/render.js [levelIndex] */
+const fs = require("fs"), zlib = require("zlib"), path = require("path");
+const P = require("../www/physics.js");
+const LEVELS = require("../www/levels.js");
+const W = P.W, H = P.H;
+
+function png(w, h, rgb) {
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) { raw[y * (w * 3 + 1)] = 0; rgb.copy(raw, y * (w * 3 + 1) + 1, y * w * 3, (y + 1) * w * 3); }
+  const crc = (b) => { let c, t = []; for (let n = 0; n < 256; n++) { c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } let cc = -1; for (const x of b) cc = t[(cc ^ x) & 255] ^ (cc >>> 8); return (cc ^ -1) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+class Img {
+  constructor() { this.b = Buffer.alloc(W * H * 3); this.fill([8, 9, 22]); }
+  fill(c) { for (let i = 0; i < W * H; i++) { this.b[i * 3] = c[0]; this.b[i * 3 + 1] = c[1]; this.b[i * 3 + 2] = c[2]; } }
+  px(x, y, c) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= W || y >= H) return; const i = (y * W + x) * 3; this.b[i] = c[0]; this.b[i + 1] = c[1]; this.b[i + 2] = c[2]; }
+  circle(cx, cy, r, c, fillIt) { for (let y = cy - r - 1; y <= cy + r + 1; y++) for (let x = cx - r - 1; x <= cx + r + 1; x++) { const d = Math.hypot(x - cx, y - cy); if (fillIt ? d <= r : Math.abs(d - r) < 1) this.px(x, y, c); } }
+  rect(x, y, w, h, c) { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) this.px(i, j, c); }
+  line(x0, y0, x1, y1, c) { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0)); for (let i = 0; i <= n; i++) this.px(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, c); }
+}
+const COLS = [[255, 94, 126], [77, 210, 255], [180, 140, 255], [125, 255, 160]];
+
+function trajectory(level, tapSlots) {
+  const s = P.make(level); P.launch(s); const pts = [{ x: s.x, y: s.y, a: s.active }]; const tapPts = [];
+  let slot = 0, k = 0;
+  while (s.status === "live") {
+    if (k % P.STEPS_PER_SLOT === 0) { if (tapSlots.includes(slot)) { P.flip(s, level); tapPts.push({ x: s.x, y: s.y }); } slot++; }
+    P.step(s, level); pts.push({ x: s.x, y: s.y, a: s.active }); k++;
+  }
+  return { pts, tapPts, status: s.status, why: s.why, t: s.t };
+}
+
+function render(level, i, tapSlots) {
+  const im = new Img();
+  if (level.walls) for (const w of level.walls) im.rect(w.x, w.y, w.w, w.h, [70, 76, 130]);
+  level.planets.forEach((p, k) => {
+    im.circle(p.x, p.y, p.r, COLS[k % 4], true); im.circle(p.x, p.y, p.r + P.ORB_R, [40, 44, 80], false);
+    if (p.move) im.line(p.x - p.move.ax, p.y - p.move.ay, p.x + p.move.ax, p.y + p.move.ay, [200, 200, 200]);
+  });
+  if (level.gates) for (const g of level.gates) { im.circle(g.x, g.y, g.r, [230, 230, 255], false); }
+  im.circle(level.goal.x, level.goal.y, level.goal.r, [255, 216, 77], false);
+  im.circle(level.goal.x, level.goal.y, level.goal.r - 2, [255, 216, 77], false);
+  // no-tap path (grey) for reference
+  const base = trajectory(level, []);
+  for (let j = 1; j < base.pts.length; j++) im.line(base.pts[j - 1].x, base.pts[j - 1].y, base.pts[j].x, base.pts[j].y, [60, 60, 70]);
+  const tr = trajectory(level, tapSlots);
+  for (let j = 1; j < tr.pts.length; j++) im.line(tr.pts[j - 1].x, tr.pts[j - 1].y, tr.pts[j].x, tr.pts[j].y, COLS[tr.pts[j].a % 4].map((v) => v * 0.85 | 0));
+  for (const t of tr.tapPts) im.circle(t.x, t.y, 5, [255, 255, 255], true);
+  im.circle(level.start.x, level.start.y, P.ORB_R, [255, 255, 255], false);
+  fs.mkdirSync(path.join(__dirname, "out"), { recursive: true });
+  fs.writeFileSync(path.join(__dirname, "out", String(i + 1).padStart(2, "0") + ".png"), png(W, H, im.b));
+  tr.img = im;
+  return tr;
+}
+module.exports = { render, trajectory };
+if (require.main === module) {
+  const { solve } = require("./solve.js");
+  const only = process.argv[2] !== undefined ? Number(process.argv[2]) : null;
+  const imgs = [];
+  LEVELS.forEach((lv, i) => {
+    if (only !== null && i !== only) return;
+    const r = solve(lv);
+    const ex = r.min !== null ? r.example[r.min] : [];
+    const tr = render(lv, i, ex);
+    imgs.push(tr.img);
+    console.log(`${i + 1} ${lv.name}: min=${r.min} ${tr.status} ${tr.why} t=${tr.t.toFixed(1)}`);
+  });
+  // contact sheets: pages of 20 (4 x 5), half scale
+  const cols = 4, per = 20, cw = W / 2, ch = H / 2;
+  for (let pg = 0; pg * per < imgs.length; pg++) {
+    const page = imgs.slice(pg * per, pg * per + per), rows = Math.ceil(page.length / cols);
+    const sheet = Buffer.alloc(cols * cw * rows * ch * 3);
+    page.forEach((im, k) => {
+      const ox = (k % cols) * cw, oy = Math.floor(k / cols) * ch;
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+        const si = ((y * 2) * W + x * 2) * 3, di = ((oy + y) * cols * cw + ox + x) * 3;
+        for (let c = 0; c < 3; c++) sheet[di + c] = Math.max(im.b[si + c], im.b[si + 3 + c], im.b[si + W * 3 + c], im.b[si + W * 3 + 3 + c]);
+      }
+    });
+    fs.writeFileSync(path.join(__dirname, "out", `sheet-${pg + 1}.png`), png(cols * cw, rows * ch, sheet));
+  }
+}

@@ -1,0 +1,86 @@
+# Codemagic CI config — builds & uploads Orbit Lock (Capacitor) to TestFlight
+# from a cloud Mac. Same setup as Tidal: reuse the "appstore" variable group.
+#
+# Variable group "appstore" (Codemagic → Teams → Environment variables), all Secure:
+#   APP_STORE_CONNECT_ISSUER_ID       = Issuer ID (UUID)
+#   APP_STORE_CONNECT_KEY_IDENTIFIER  = Key ID (~10 chars)
+#   APP_STORE_CONNECT_PRIVATE_KEY     = full contents of the .p8 file
+#   CERTIFICATE_PRIVATE_KEY           = full contents of cert_private_key.pem
+# The App Store Connect key needs ADMIN access so it can create the
+# distribution certificate + provisioning profile for the new bundle id.
+
+workflows:
+  ios-orbitlock:
+    name: Orbit Lock iOS
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - appstore
+      vars:
+        BUNDLE_ID: "com.mschaefer20.orbitlock"
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        MARKETING_VERSION: "1.0"
+      node: 20
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install npm dependencies
+        script: npm install
+      - name: Prove every level still solves
+        script: node tools/solve.js
+      - name: Add iOS platform (not committed)
+        script: |
+          if [ ! -d "ios" ]; then npx cap add ios; fi
+      - name: Sync web assets + plugins into the native project
+        script: npx cap sync ios
+      - name: Make the app iPhone-only (no iPad)
+        script: node ci/iphone-only.js
+      - name: Configure Info.plist (compliance + portrait lock)
+        script: |
+          PLIST=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $MARKETING_VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $MARKETING_VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:0 string UIInterfaceOrientationPortrait" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations~ipad" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UIRequiresFullScreen bool true" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Set :UIRequiresFullScreen true" "$PLIST"
+      - name: Configure audio session (play through the mute switch)
+        script: node ci/configure-audio.js
+      - name: Generate app icon & splash
+        script: npx capacitor-assets generate --ios || true
+      - name: Install CocoaPods
+        script: cd ios/App && pod install
+      - name: Fetch signing files & set up keychain (uses the API key)
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key="@env:CERTIFICATE_PRIVATE_KEY" \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Set build number (Codemagic's monotonic build counter)
+        script: |
+          cd ios/App
+          agvtool new-version -all "$BUILD_NUMBER"
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        # Upload only: internal TestFlight testers get it immediately.
+        submit_to_testflight: false

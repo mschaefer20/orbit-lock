@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Capacitor / iOS native build output (ios/ is generated on CI, not committed)
+ios/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Level tool output (regenerable)
+tools/out/
+tools/*.log
+
+# macOS / misc
+.DS_Store
+*.log
+npm-debug.log*
+
+# Build artifacts
+*.ipa
+*.dSYM.zip
+build/
+
+# Code signing private key (NEVER commit)
+cert_private_key.pem
+
+# Android (not set up)
+android/
+*.jks
+*.keystore
+key.properties
