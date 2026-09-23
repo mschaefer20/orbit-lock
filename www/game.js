@@ -114,164 +114,224 @@
     const host = $("journey"); host.innerHTML = "";
     const total = LEVELS.length;
     let frontier = 0; while (frontier < total - 1 && save.stars[frontier]) frontier++;
-    // the whole road is visible; what lies ahead is just dimmer
-    const shown = total;
-    J.shown = shown;
+    const shown = total; J.shown = shown;
     const h = J.top + J.pad + (shown - 1) * J.step;
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", "0 0 " + J.w + " " + h);
     svg.setAttribute("width", J.w); svg.setAttribute("height", h);
     const el = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
-
-    // sky: the same tint drift as in-game, one band per 20 levels, blended
-    const defs = el("defs", {});
-    const grad = el("linearGradient", { id: "sky", x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
+    let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const ri = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
+    const bandOf = (i) => Math.min(TINTS.length - 1, Math.floor(i / 20));
     const bands = Math.ceil(total / 20);
+    const reached = (i) => unlockAll || i <= frontier;
+    const defs = el("defs", {});
+    let uid = 0; const gid = () => "g" + (uid++);
+    const radial = (col, stops) => { const g = el("radialGradient", { id: gid() }, defs); stops.forEach(([o, op]) => el("stop", { offset: o, "stop-color": col, "stop-opacity": op }, g)); return "url(#" + g.id + ")"; };
+
+    // ---- sky ---------------------------------------------------------------
+    const sky = el("linearGradient", { id: "sky", x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
     for (let b = 0; b < bands; b++) {
       const t = TINTS[Math.min(TINTS.length - 1, b)];
-      el("stop", { offset: (b / bands) * 100 + "%", "stop-color": t.bg }, grad);
-      el("stop", { offset: ((b + 1) / bands) * 100 - 2 + "%", "stop-color": t.bg }, grad);
+      el("stop", { offset: (b / bands) * 100 + "%", "stop-color": t.bg }, sky);
+      el("stop", { offset: ((b + 1) / bands) * 100 - 2 + "%", "stop-color": t.bg }, sky);
     }
     el("rect", { x: 0, y: 0, width: J.w, height: h, fill: "url(#sky)" });
-    // stars, seeded so the map is stable
-    let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < total * 3; i++) {
-      const cy = rnd() * h;                      // band follows height: bottom = level 1
-      const band = TINTS[Math.min(TINTS.length - 1, Math.floor((h - cy) / (J.step * 20)))];
-      el("circle", { cx: rnd() * J.w, cy, r: 0.5 + rnd() * 1.1, fill: band.star, opacity: 0.15 + rnd() * 0.45 });
-    }
 
-    // scenery: a soft nebula glow per band, and small planets beside the road,
-    // coloured from each level's own first planet so the map echoes the levels
-    for (let b = 0; b < bands; b++) {
+    // ---- far layer (parallax: scrolls slower than the road) ----------------
+    const far = el("g", { id: "far" });
+    for (let b = 0; b < bands; b++) {   // nebulae, two per band, different sides
       const t = TINTS[Math.min(TINTS.length - 1, b)];
-      const rg = el("radialGradient", { id: "neb" + b }, defs);
-      el("stop", { offset: "0%", "stop-color": t.star, "stop-opacity": 0.09 }, rg);
-      el("stop", { offset: "100%", "stop-color": t.star, "stop-opacity": 0 }, rg);
-      const cy = nodePos(Math.min(total - 1, b * 20 + 10)).y;
-      el("ellipse", { cx: b % 2 ? J.w * 0.72 : J.w * 0.28, cy, rx: 200, ry: 420, fill: "url(#neb" + b + ")" });
+      for (let k = 0; k < 2; k++) {
+        const cx = k ? J.w * 0.78 : J.w * 0.22, cy = nodePos(Math.min(total - 1, b * 20 + 4 + k * 11)).y;
+        el("ellipse", { cx, cy, rx: 150 + ri(0, 80), ry: 260 + ri(0, 160), fill: radial(t.star, [["0%", 0.11], ["100%", 0]]), transform: "rotate(" + ri(-30, 30) + " " + cx + " " + cy + ")" }, far);
+      }
     }
-    LEVELS.forEach((lv, i) => {
-      if (i % 3 !== 1) return;
-      const p = nodePos(i), side = p.x > J.w / 2 ? 1 : -1;   // outer side of the curve (names sit inside)
-      const pl = lv.planets[0], c = COLS[0], c2 = COLS[(lv.planets.length - 1) % 4];
-      const r = 5 + (pl.r / 54) * 9;
-      const x = Math.max(18, Math.min(J.w - 18, p.x + side * (46 + (i % 5) * 7))), y = p.y + 34 + (i % 4) * 8;
-      const dim = i <= frontier ? 0.55 : 0.22;
-      const rg = el("radialGradient", { id: "pl" + i }, defs);
-      el("stop", { offset: "0%", "stop-color": i % 2 ? c : c2 }, rg);
-      el("stop", { offset: "70%", "stop-color": i % 2 ? c : c2 }, rg);
-      el("stop", { offset: "100%", "stop-color": i % 2 ? c : c2, "stop-opacity": 0.1 }, rg);
-      el("circle", { cx: x, cy: y, r: r * 1.12, fill: "url(#pl" + i + ")", opacity: dim });
-      if (i % 6 === 1) el("ellipse", { cx: x, cy: y, rx: r * 2.2, ry: r * 0.7, fill: "none", stroke: i % 2 ? c : c2, "stroke-width": 1, opacity: dim * 0.5, transform: "rotate(-18 " + x + " " + y + ")" });
-    });
+    for (let i = 0; i < total * 4; i++) {   // far stars, tiny
+      const cy = rnd() * h;
+      el("circle", { cx: rnd() * J.w, cy, r: 0.4 + rnd() * 0.8, fill: TINTS[Math.min(TINTS.length - 1, Math.floor((h - cy) / (J.step * 20)))].star, opacity: 0.12 + rnd() * 0.3 }, far);
+    }
+    // constellations: a few stars joined by faint lines, one per ~15 levels
+    for (let c = 0; c * 15 + 7 < total; c++) {
+      const anchor = nodePos(c * 15 + 7), side = anchor.x > J.w / 2 ? -1 : 1;
+      const cx = J.w / 2 + side * (J.w * 0.28 + ri(-20, 20)), cy = anchor.y + ri(-30, 30);
+      const pts = []; const n = ri(4, 6);
+      for (let k = 0; k < n; k++) pts.push({ x: cx + ri(-46, 46), y: cy + ri(-60, 60) });
+      const path = pts.map((p, k) => (k ? "L" : "M") + p.x + " " + p.y).join(" ");
+      el("path", { d: path, fill: "none", stroke: "#eef0ff", "stroke-width": 0.8, opacity: 0.16 }, far);
+      pts.forEach((p) => el("circle", { cx: p.x, cy: p.y, r: 1.4 + rnd(), fill: "#eef0ff", opacity: 0.6 }, far));
+    }
 
-    // landmarks: one at each 20-level boundary, on the outer side of the road.
-    // No names, no chapter screens: you just pass something big.
+    // ---- near stars: some twinkle -------------------------------------------
+    for (let i = 0; i < total * 2; i++) {
+      const cy = rnd() * h, st = el("circle", { cx: rnd() * J.w, cy, r: 0.6 + rnd() * 1.2, fill: TINTS[Math.min(TINTS.length - 1, Math.floor((h - cy) / (J.step * 20)))].star, opacity: 0.25 + rnd() * 0.5 });
+      if (i % 5 === 0) el("animate", { attributeName: "opacity", values: "0.2;0.9;0.2", dur: (2 + rnd() * 4).toFixed(1) + "s", begin: (rnd() * 4).toFixed(1) + "s", repeatCount: "indefinite" }, st);
+    }
+    // shooting stars: a handful, each streaks across on a long loop
+    for (let k = 0; k < Math.max(3, Math.floor(total / 15)); k++) {
+      const y = rnd() * (h - 200) + 100, len = 70;
+      const g = el("g", { opacity: 0 });
+      el("line", { x1: 0, y1: 0, x2: -len, y2: len * 0.35, stroke: "#eef0ff", "stroke-width": 1.5, "stroke-linecap": "round", opacity: 0.8 }, g);
+      el("circle", { r: 1.8, fill: "#fff" }, g);
+      const dur = (12 + rnd() * 18).toFixed(1) + "s", begin = (rnd() * 20).toFixed(1) + "s";
+      el("animateTransform", { attributeName: "transform", type: "translate", from: "-60 " + y, to: (J.w + 80) + " " + (y - (J.w + 140) * 0.35), dur, begin, repeatCount: "indefinite" }, g);
+      el("animate", { attributeName: "opacity", values: "0;1;1;0;0", keyTimes: "0;0.05;0.12;0.16;1", dur, begin, repeatCount: "indefinite" }, g);
+    }
+
+    // ---- scenery beside the road ----------------------------------------------
+    const planet = (x, y, r, col, on, kind) => {
+      const g = el("g", { opacity: on ? 0.9 : 0.32 });
+      if (kind === "ringed") el("ellipse", { cx: x, cy: y, rx: r * 2.1, ry: r * 0.55, fill: "none", stroke: col, "stroke-width": 1.2, opacity: 0.55, transform: "rotate(-20 " + x + " " + y + ")" }, g);
+      el("circle", { cx: x, cy: y, r, fill: radial(col, [["0%", 1], ["72%", 1], ["100%", 0.12]]) }, g);
+      if (kind === "ringed") el("path", { d: "M" + (x - r * 2.1) + " " + y + " A" + (r * 2.1) + " " + (r * 0.55) + " 0 0 0 " + (x + r * 2.1) + " " + y, fill: "none", stroke: col, "stroke-width": 1.4, opacity: 0.9, transform: "rotate(-20 " + x + " " + y + ")" }, g);
+      if (kind === "cratered") for (let k = 0; k < 3; k++) { const a = rnd() * 6.28, d = rnd() * r * 0.55; el("circle", { cx: x + Math.cos(a) * d, cy: y + Math.sin(a) * d, r: r * (0.12 + rnd() * 0.16), fill: "#05060f", opacity: 0.35 }, g); }
+      if (kind === "banded") { const cp = el("clipPath", { id: gid() }, defs); el("circle", { cx: x, cy: y, r }, cp); for (let k = -1; k <= 1; k += 2) el("rect", { x: x - r, y: y + k * r * 0.35 - r * 0.09, width: r * 2, height: r * 0.18, fill: "#05060f", opacity: 0.28, "clip-path": "url(#" + cp.id + ")" }, g); }
+      if (kind === "moon") {
+        const orb = el("g", {}, g);
+        el("circle", { cx: x + r * 1.9, cy: y, r: r * 0.28, fill: "#eef0ff", opacity: 0.8 }, orb);
+        el("animateTransform", { attributeName: "transform", type: "rotate", from: "0 " + x + " " + y, to: "360 " + x + " " + y, dur: (6 + rnd() * 8).toFixed(1) + "s", repeatCount: "indefinite" }, orb);
+      }
+    };
+    const KINDS = ["plain", "ringed", "cratered", "banded", "moon", "plain"];
+    LEVELS.forEach((lv, i) => {
+      if (i % 2 !== 1) return;
+      const p = nodePos(i), side = p.x > J.w / 2 ? 1 : -1;
+      const col = COLS[(i * 7 + lv.planets.length) % 4];
+      const r = 5 + (lv.planets[0].r / 54) * 8;
+      const x = Math.max(16, Math.min(J.w - 16, p.x + side * (44 + ri(0, 40)))), y = p.y + 28 + ri(0, 30);
+      planet(x, y, r, col, reached(i), KINDS[(i >> 1) % KINDS.length]);
+    });
+    // asteroid belts: a scatter of grey rocks crossing the road on a slant
+    for (let b = 12; b < total - 5; b += 25) {
+      const p = nodePos(b), on = reached(b);
+      const g = el("g", { opacity: on ? 0.7 : 0.3 });
+      for (let k = 0; k < 34; k++) {
+        const t = (k / 34) - 0.5, x = J.w / 2 + t * J.w * 1.1 + ri(-10, 10), y = p.y + t * 70 + ri(-22, 22);
+        const near = Math.hypot(x - p.x, y - p.y) < 34 || Math.hypot(x - nodePos(b + 1).x, y - nodePos(b + 1).y) < 34;
+        if (near) continue;
+        el("circle", { cx: x, cy: y, r: 1 + rnd() * 2.4, fill: "#8a8fb5", opacity: 0.35 + rnd() * 0.5 }, g);
+      }
+    }
+    // a satellite, and a wormhole pair, as one-off set pieces
+    if (total > 50) {
+      const p = nodePos(48), side = p.x > J.w / 2 ? -1 : 1, x = Math.max(60, Math.min(J.w - 60, p.x + side * 120)), y = p.y + 10, on = reached(48);
+      const g = el("g", { opacity: on ? 0.85 : 0.3, transform: "rotate(-25 " + x + " " + y + ")" });
+      el("rect", { x: x - 26, y: y - 5, width: 16, height: 10, fill: COLS[1], opacity: 0.8 }, g);
+      el("rect", { x: x + 10, y: y - 5, width: 16, height: 10, fill: COLS[1], opacity: 0.8 }, g);
+      el("line", { x1: x - 10, y1: y, x2: x + 10, y2: y, stroke: "#8a8fb5", "stroke-width": 1.5 }, g);
+      el("circle", { cx: x, cy: y, r: 4.5, fill: "#eef0ff" }, g);
+    }
+    if (total > 32) {
+      const a = nodePos(31), b = nodePos(34), on = reached(31);
+      const ax = Math.max(40, Math.min(J.w - 40, a.x + (a.x > J.w / 2 ? -1 : 1) * 105)), bx = Math.max(40, Math.min(J.w - 40, b.x + (b.x > J.w / 2 ? -1 : 1) * 105));
+      const g = el("g", { opacity: on ? 0.9 : 0.3 });
+      el("line", { x1: ax, y1: a.y, x2: bx, y2: b.y, stroke: COLS[2], "stroke-width": 1.2, "stroke-dasharray": "4 7", opacity: 0.4 }, g);
+      [[ax, a.y], [bx, b.y]].forEach(([x, y]) => {
+        el("circle", { cx: x, cy: y, r: 12, fill: "none", stroke: COLS[2], "stroke-width": 2.5, opacity: 0.9 }, g);
+        const sw = el("path", { d: "M" + (x + 6.5) + " " + y + " A6.5 6.5 0 1 1 " + x + " " + (y - 6.5), fill: "none", stroke: COLS[2], "stroke-width": 1.6 }, g);
+        el("animateTransform", { attributeName: "transform", type: "rotate", from: "0 " + x + " " + y, to: "360 " + x + " " + y, dur: "3s", repeatCount: "indefinite" }, sw);
+      });
+    }
+
+    // ---- landmarks at each 20-level boundary ----------------------------------
     const LANDMARKS = [
-      function ringedGiant(x, y, c, on) {   // after 20
-        const rg = el("radialGradient", { id: "lm-g" + x }, defs);
-        el("stop", { offset: "0%", "stop-color": COLS[2] }, rg); el("stop", { offset: "100%", "stop-color": COLS[2], "stop-opacity": 0.15 }, rg);
+      function ringedGiant(x, y, on) {
         el("ellipse", { cx: x, cy: y, rx: 62, ry: 16, fill: "none", stroke: COLS[2], "stroke-width": 2, opacity: on ? 0.5 : 0.2, transform: "rotate(-22 " + x + " " + y + ")" });
-        el("circle", { cx: x, cy: y, r: 30, fill: "url(#lm-g" + x + ")", opacity: on ? 0.9 : 0.35 });
+        el("circle", { cx: x, cy: y, r: 30, fill: radial(COLS[2], [["0%", 1], ["100%", 0.15]]), opacity: on ? 0.9 : 0.35 });
         el("path", { d: "M" + (x - 62) + " " + y + " A62 16 0 0 0 " + (x + 62) + " " + y, fill: "none", stroke: COLS[2], "stroke-width": 2, opacity: on ? 0.7 : 0.25, transform: "rotate(-22 " + x + " " + y + ")" });
       },
-      function binaryPair(x, y, c, on) {    // after 40
+      function binaryPair(x, y, on) {
         el("ellipse", { cx: x, cy: y, rx: 46, ry: 20, fill: "none", stroke: "#2a2f5a", "stroke-width": 1.5, opacity: on ? 0.9 : 0.4, transform: "rotate(30 " + x + " " + y + ")" });
-        const a = { x: x - 38, y: y - 14 }, b = { x: x + 38, y: y + 14 };
-        [[a, COLS[0]], [b, COLS[1]]].forEach(([p, col], k) => {
-          const rg = el("radialGradient", { id: "lm-b" + x + k }, defs);
-          el("stop", { offset: "0%", "stop-color": col }, rg); el("stop", { offset: "100%", "stop-color": col, "stop-opacity": 0.15 }, rg);
-          el("circle", { cx: p.x, cy: p.y, r: 15, fill: "url(#lm-b" + x + k + ")", opacity: on ? 0.9 : 0.35 });
-        });
+        const pair = el("g", {});
+        [[-38, -14, COLS[0]], [38, 14, COLS[1]]].forEach(([dx, dy, col]) => el("circle", { cx: x + dx, cy: y + dy, r: 15, fill: radial(col, [["0%", 1], ["100%", 0.15]]), opacity: on ? 0.9 : 0.35 }, pair));
+        if (on) el("animateTransform", { attributeName: "transform", type: "rotate", from: "0 " + x + " " + y, to: "360 " + x + " " + y, dur: "14s", repeatCount: "indefinite" }, pair);
       },
-      function blackHole(x, y, c, on) {     // after 60
-        const rg = el("radialGradient", { id: "lm-h" + x }, defs);
-        el("stop", { offset: "0%", "stop-color": "#eef0ff", "stop-opacity": 0 }, rg);
-        el("stop", { offset: "78%", "stop-color": "#eef0ff", "stop-opacity": 0 }, rg);
-        el("stop", { offset: "90%", "stop-color": GOLD, "stop-opacity": on ? 0.55 : 0.2 }, rg);
-        el("stop", { offset: "100%", "stop-color": GOLD, "stop-opacity": 0 }, rg);
-        el("circle", { cx: x, cy: y, r: 48, fill: "url(#lm-h" + x + ")" });
+      function blackHole(x, y, on) {
+        el("circle", { cx: x, cy: y, r: 48, fill: radial(GOLD, [["0%", 0], ["78%", 0], ["90%", on ? 0.55 : 0.2], ["100%", 0]]) });
         el("ellipse", { cx: x, cy: y, rx: 58, ry: 10, fill: "none", stroke: GOLD, "stroke-width": 1.2, opacity: on ? 0.45 : 0.15, transform: "rotate(-14 " + x + " " + y + ")" });
         el("circle", { cx: x, cy: y, r: 22, fill: "#000" });
         el("circle", { cx: x, cy: y, r: 23, fill: "none", stroke: "#eef0ff", "stroke-width": 1.2, opacity: on ? 0.8 : 0.3 });
       },
-      function comet(x, y, c, on) {         // after 80
-        const lg = el("linearGradient", { id: "lm-c" + x, gradientUnits: "userSpaceOnUse", x1: x, y1: y, x2: x + 110, y2: y - 70 }, defs);
+      function comet(x, y, on) {
+        const lg = el("linearGradient", { id: gid(), gradientUnits: "userSpaceOnUse", x1: x, y1: y, x2: x + 110, y2: y - 70 }, defs);
         el("stop", { offset: "0%", "stop-color": COLS[3], "stop-opacity": on ? 0.7 : 0.25 }, lg);
         el("stop", { offset: "100%", "stop-color": COLS[3], "stop-opacity": 0 }, lg);
-        el("path", { d: "M" + x + " " + (y - 8) + " L" + (x + 110) + " " + (y - 70) + " L" + x + " " + (y + 8) + " Z", fill: "url(#lm-c" + x + ")" });
+        el("path", { d: "M" + x + " " + (y - 8) + " L" + (x + 110) + " " + (y - 70) + " L" + x + " " + (y + 8) + " Z", fill: "url(#" + lg.id + ")" });
         el("circle", { cx: x, cy: y, r: 9, fill: COLS[3], opacity: on ? 1 : 0.4 });
         el("circle", { cx: x, cy: y, r: 16, fill: COLS[3], opacity: on ? 0.25 : 0.08 });
       },
-      function summit(x, y, c, on) {        // after 100: the ring itself
+      function summit(x, y, on) {
         el("circle", { cx: x, cy: y, r: 34, fill: GOLD, opacity: on ? 0.18 : 0.06 });
         el("circle", { cx: x, cy: y, r: 26, fill: "none", stroke: GOLD, "stroke-width": 3, opacity: on ? 1 : 0.35 });
         el("circle", { cx: x, cy: y, r: 9, fill: COLS[1], opacity: on ? 1 : 0.35 });
       },
     ];
     for (let b = 1; b * 20 <= total; b++) {
-      const idx = Math.min(total - 1, b * 20 - 1);          // last level of the band
+      const idx = Math.min(total - 1, b * 20 - 1);
       const p = nodePos(idx), on = !!save.stars[idx] || unlockAll;
       const draw = LANDMARKS[Math.min(LANDMARKS.length - 1, b - 1)];
-      const isEnd = b * 20 === total;
-      if (isEnd) draw(J.w / 2, p.y - 80, null, on);
-      else { const side = p.x > J.w / 2 ? -1 : 1; draw(Math.max(70, Math.min(J.w - 70, p.x + side * 120)), p.y - 42, null, on); }
+      if (b * 20 === total) draw(J.w / 2, p.y - 80, on);
+      else { const side = p.x > J.w / 2 ? -1 : 1; draw(Math.max(70, Math.min(J.w - 70, p.x + side * 120)), p.y - 42, on); }
     }
-    if (total % 20 !== 0) { const p = nodePos(total - 1); LANDMARKS[4](J.w / 2, p.y - 80, null, !!save.stars[total - 1] || unlockAll); }
+    if (total % 20 !== 0) LANDMARKS[4](J.w / 2, nodePos(total - 1).y - 80, !!save.stars[total - 1] || unlockAll);
 
-    // road: full length faint, travelled part lit
+    // ---- road: faint ahead, lit and flowing behind you ---------------------------
     el("path", { d: roadPath(0, shown - 1), fill: "none", stroke: "#2a2f5a", "stroke-width": 3, "stroke-linecap": "round" });
     if (frontier > 0) {
-      const lit = el("path", { d: roadPath(0, frontier), fill: "none", stroke: "url(#lit)", "stroke-width": 3, "stroke-linecap": "round" });
       const lg = el("linearGradient", { id: "lit", gradientUnits: "userSpaceOnUse", x1: 0, y1: nodePos(0).y, x2: 0, y2: nodePos(frontier).y }, defs);
       el("stop", { offset: "0%", "stop-color": COLS[0] }, lg);
       el("stop", { offset: "100%", "stop-color": COLS[1] }, lg);
-      lit.setAttribute("opacity", 0.85);
+      el("path", { d: roadPath(0, frontier), fill: "none", stroke: "url(#lit)", "stroke-width": 3, "stroke-linecap": "round", opacity: 0.85 });
+      const flow = el("path", { d: roadPath(0, frontier), fill: "none", stroke: "#fff", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-dasharray": "2 14", opacity: 0.55 });
+      el("animate", { attributeName: "stroke-dashoffset", from: 64, to: 0, dur: "2.4s", repeatCount: "indefinite" }, flow);
     }
 
-    // nodes
+    // ---- nodes -----------------------------------------------------------------
     LEVELS.forEach((lv, i) => {
-      if (i >= shown) return;
       const p = nodePos(i), st = save.stars[i] || 0, open = unlocked(i), isCur = i === frontier;
       const g = el("g", { class: "node" + (open ? "" : " locked"), transform: "translate(" + p.x + " " + p.y + ")" });
       const hasNew = (lv.gates && lv.gates.length && !LEVELS.slice(0, i).some((l) => l.gates && l.gates.length)) ||
                      (lv.planets.some((q) => q.move) && !LEVELS.slice(0, i).some((l) => l.planets.some((q) => q.move)));
+      el("circle", { r: 20, fill: TINTS[bandOf(i)].bg }, g);
       if (st) {
-        el("circle", { r: 20, fill: TINTS[Math.min(TINTS.length - 1, Math.floor(i / 20))].bg }, g);
         el("circle", { r: 16, fill: COLS[1], opacity: 0.18 }, g);
         el("circle", { r: 16, fill: "none", stroke: COLS[1], "stroke-width": 2 }, g);
+        if (st === 3) el("circle", { r: 19.5, fill: "none", stroke: GOLD, "stroke-width": 1, opacity: 0.7 }, g);
       } else if (isCur) {
-        el("circle", { r: 20, fill: TINTS[Math.min(TINTS.length - 1, Math.floor(i / 20))].bg }, g);
         el("circle", { r: 16, fill: GOLD, opacity: 0.15 }, g);
         el("circle", { r: 16, fill: "none", stroke: GOLD, "stroke-width": 2.5 }, g);
         const halo = el("circle", { r: 22, fill: "none", stroke: GOLD, "stroke-width": 1.5, opacity: 0.6 }, g);
-        const an = el("animate", { attributeName: "r", values: "20;27;20", dur: "2.2s", repeatCount: "indefinite" }, halo);
+        el("animate", { attributeName: "r", values: "20;27;20", dur: "2.2s", repeatCount: "indefinite" }, halo);
         el("animate", { attributeName: "opacity", values: "0.6;0;0.6", dur: "2.2s", repeatCount: "indefinite" }, halo);
-        void an;
+        // your orb, waiting above the node
+        const orb = el("g", {}, g);
+        el("circle", { cx: 0, cy: -30, r: 10, fill: COLS[1], opacity: 0.25 }, orb);
+        el("circle", { cx: 0, cy: -30, r: 6, fill: COLS[1] }, orb);
+        el("animateTransform", { attributeName: "transform", type: "translate", values: "0 0;0 -4;0 0", dur: "1.8s", repeatCount: "indefinite" }, orb);
         el("text", { y: 38, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 2, opacity: 0.8 }, g).textContent = "TAP TO PLAY";
       } else {
-        // locked, ahead on the road: a small dark bead, numbered faintly
-        el("circle", { r: 20, fill: TINTS[Math.min(TINTS.length - 1, Math.floor(i / 20))].bg }, g);
         el("circle", { r: open ? 14 : 10, fill: "#0b0e22", stroke: "#2a2f5a", "stroke-width": 1.5 }, g);
         if (!open) el("text", { y: 3.5, "text-anchor": "middle", "font-size": 9, fill: "#3a4080" }, g).textContent = i + 1;
       }
       if (open) {
         el("text", { y: 5, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: st ? "#eef0ff" : isCur ? GOLD : "#7d82ad" }, g).textContent = i + 1;
-        if (st) el("text", { y: 34, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "★".repeat(st) + "☆".repeat(3 - st);
-        // no names on the map; only flag a level that brings something new
+        if (st) el("text", { y: 34, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "\u2605".repeat(st) + "\u2606".repeat(3 - st);
         const side = p.x > J.w / 2 ? -1 : 1;
         if (hasNew && !st) el("text", { x: side * 30, y: 4, "text-anchor": side < 0 ? "end" : "start", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "SOMETHING NEW";
         g.addEventListener("click", () => { loadLevel(i); showScreen(null); });
       }
     });
     host.appendChild(svg);
-    // start the view on the current level, a little below centre so the road ahead shows
-    const target = nodePos(frontier).y * (host.clientWidth / J.w) - host.clientHeight * 0.58;
-    host.scrollTop = Math.max(0, target);
+
+    // parallax: the far layer follows the scroll at a fraction of the speed
+    const scale = () => host.clientWidth / J.w;
+    const onScroll = () => { far.setAttribute("transform", "translate(0 " + (host.scrollTop / scale() * 0.35).toFixed(1) + ")"); };
+    host.onscroll = onScroll;
+    host.scrollTop = Math.max(0, nodePos(frontier).y * scale() - host.clientHeight * 0.58);
+    onScroll();
     let stars = 0; for (const k in save.stars) stars += save.stars[k];
-    $("map-stars").textContent = stars + " ★";
+    $("map-stars").textContent = stars + " \u2605";
   }
   function renderPips() {
     pipsEl.innerHTML = "";
