@@ -78,14 +78,15 @@
 
   // ---- DOM -----------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
-  const screens = ["title", "howto", "levels", "win"].reduce((m, k) => (m[k] = $("screen-" + k), m), {});
+  const screens = ["howto", "levels", "win"].reduce((m, k) => (m[k] = $("screen-" + k), m), {});
   const hudLevel = $("hud-level"), hudName = $("hud-name"), pipsEl = $("pips"), footer = $("footer-hint");
-  let current = "title", returnTo = "title";
+  let current = "levels", returnTo = "levels";
   function showScreen(name) {
-    if ((name === "levels" || name === "howto") && current !== "levels" && current !== "howto") returnTo = current;
+    if (name === "howto" && current !== "howto") returnTo = current;
     current = name;
     for (const k in screens) screens[k].classList.toggle("hidden", k !== name);
     playing = !name;
+    $("app").classList.toggle("on-map", name === "levels");
     if (name === "levels") buildLevelGrid();
   }
   function starStr(n) {
@@ -93,21 +94,184 @@
     for (let i = 0; i < 3; i++) out += '<span class="' + (i < n ? "" : "off") + '">&#9733;</span>';
     return out;
   }
+  // ---- journey map: one winding road, level 1 at the bottom, climbing up ----
+  const J = { w: 360, step: 84, pad: 70, top: 170, amp: 92, ahead: 3, shown: 1 };
+  function nodePos(i) {
+    return { x: J.w / 2 + Math.sin(i * 0.62) * J.amp, y: J.top + (J.shown - 1 - i) * J.step };
+  }
+  function roadPath(from, to) {
+    // smooth curve through the nodes from..to (inclusive), as an SVG path
+    let d = "";
+    for (let i = from; i <= to; i++) {
+      const p = nodePos(i);
+      if (i === from) { d += "M" + p.x + " " + p.y; continue; }
+      const q = nodePos(i - 1), my = (p.y + q.y) / 2;
+      d += " C" + q.x + " " + my + " " + p.x + " " + my + " " + p.x + " " + p.y;
+    }
+    return d;
+  }
   function buildLevelGrid() {
-    const grid = $("level-grid"); grid.innerHTML = "";
+    const host = $("journey"); host.innerHTML = "";
+    const total = LEVELS.length;
+    let frontier = 0; while (frontier < total - 1 && save.stars[frontier]) frontier++;
+    // the whole road is visible; what lies ahead is just dimmer
+    const shown = total;
+    J.shown = shown;
+    const h = J.top + J.pad + (shown - 1) * J.step;
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + J.w + " " + h);
+    svg.setAttribute("width", J.w); svg.setAttribute("height", h);
+    const el = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
+
+    // sky: the same tint drift as in-game, one band per 20 levels, blended
+    const defs = el("defs", {});
+    const grad = el("linearGradient", { id: "sky", x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
+    const bands = Math.ceil(total / 20);
+    for (let b = 0; b < bands; b++) {
+      const t = TINTS[Math.min(TINTS.length - 1, b)];
+      el("stop", { offset: (b / bands) * 100 + "%", "stop-color": t.bg }, grad);
+      el("stop", { offset: ((b + 1) / bands) * 100 - 2 + "%", "stop-color": t.bg }, grad);
+    }
+    el("rect", { x: 0, y: 0, width: J.w, height: h, fill: "url(#sky)" });
+    // stars, seeded so the map is stable
+    let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < total * 3; i++) {
+      const cy = rnd() * h;                      // band follows height: bottom = level 1
+      const band = TINTS[Math.min(TINTS.length - 1, Math.floor((h - cy) / (J.step * 20)))];
+      el("circle", { cx: rnd() * J.w, cy, r: 0.5 + rnd() * 1.1, fill: band.star, opacity: 0.15 + rnd() * 0.45 });
+    }
+
+    // scenery: a soft nebula glow per band, and small planets beside the road,
+    // coloured from each level's own first planet so the map echoes the levels
+    for (let b = 0; b < bands; b++) {
+      const t = TINTS[Math.min(TINTS.length - 1, b)];
+      const rg = el("radialGradient", { id: "neb" + b }, defs);
+      el("stop", { offset: "0%", "stop-color": t.star, "stop-opacity": 0.09 }, rg);
+      el("stop", { offset: "100%", "stop-color": t.star, "stop-opacity": 0 }, rg);
+      const cy = nodePos(Math.min(total - 1, b * 20 + 10)).y;
+      el("ellipse", { cx: b % 2 ? J.w * 0.72 : J.w * 0.28, cy, rx: 200, ry: 420, fill: "url(#neb" + b + ")" });
+    }
     LEVELS.forEach((lv, i) => {
-      const b = document.createElement("button");
-      b.className = "lvl" + (unlocked(i) ? "" : " locked");
-      b.innerHTML = (i + 1) + "<small>" + "★".repeat(save.stars[i] || 0) + "</small>";
-      b.disabled = !unlocked(i);
-      b.addEventListener("click", () => { loadLevel(i); showScreen(null); });
-      grid.appendChild(b);
+      if (i % 3 !== 1) return;
+      const p = nodePos(i), side = p.x > J.w / 2 ? 1 : -1;   // outer side of the curve (names sit inside)
+      const pl = lv.planets[0], c = COLS[0], c2 = COLS[(lv.planets.length - 1) % 4];
+      const r = 5 + (pl.r / 54) * 9;
+      const x = Math.max(18, Math.min(J.w - 18, p.x + side * (46 + (i % 5) * 7))), y = p.y + 34 + (i % 4) * 8;
+      const dim = i <= frontier ? 0.55 : 0.22;
+      const rg = el("radialGradient", { id: "pl" + i }, defs);
+      el("stop", { offset: "0%", "stop-color": i % 2 ? c : c2 }, rg);
+      el("stop", { offset: "70%", "stop-color": i % 2 ? c : c2 }, rg);
+      el("stop", { offset: "100%", "stop-color": i % 2 ? c : c2, "stop-opacity": 0.1 }, rg);
+      el("circle", { cx: x, cy: y, r: r * 1.12, fill: "url(#pl" + i + ")", opacity: dim });
+      if (i % 6 === 1) el("ellipse", { cx: x, cy: y, rx: r * 2.2, ry: r * 0.7, fill: "none", stroke: i % 2 ? c : c2, "stroke-width": 1, opacity: dim * 0.5, transform: "rotate(-18 " + x + " " + y + ")" });
     });
-    // scroll the current level into view
-    const cur = grid.children[levelIndex];
-    if (cur) requestAnimationFrame(() => cur.scrollIntoView({ block: "center" }));
-    let total = 0; for (const k in save.stars) total += save.stars[k];
-    $("levels-summary").textContent = total + " / " + (LEVELS.length * 3) + " stars";
+
+    // landmarks: one at each 20-level boundary, on the outer side of the road.
+    // No names, no chapter screens: you just pass something big.
+    const LANDMARKS = [
+      function ringedGiant(x, y, c, on) {   // after 20
+        const rg = el("radialGradient", { id: "lm-g" + x }, defs);
+        el("stop", { offset: "0%", "stop-color": COLS[2] }, rg); el("stop", { offset: "100%", "stop-color": COLS[2], "stop-opacity": 0.15 }, rg);
+        el("ellipse", { cx: x, cy: y, rx: 62, ry: 16, fill: "none", stroke: COLS[2], "stroke-width": 2, opacity: on ? 0.5 : 0.2, transform: "rotate(-22 " + x + " " + y + ")" });
+        el("circle", { cx: x, cy: y, r: 30, fill: "url(#lm-g" + x + ")", opacity: on ? 0.9 : 0.35 });
+        el("path", { d: "M" + (x - 62) + " " + y + " A62 16 0 0 0 " + (x + 62) + " " + y, fill: "none", stroke: COLS[2], "stroke-width": 2, opacity: on ? 0.7 : 0.25, transform: "rotate(-22 " + x + " " + y + ")" });
+      },
+      function binaryPair(x, y, c, on) {    // after 40
+        el("ellipse", { cx: x, cy: y, rx: 46, ry: 20, fill: "none", stroke: "#2a2f5a", "stroke-width": 1.5, opacity: on ? 0.9 : 0.4, transform: "rotate(30 " + x + " " + y + ")" });
+        const a = { x: x - 38, y: y - 14 }, b = { x: x + 38, y: y + 14 };
+        [[a, COLS[0]], [b, COLS[1]]].forEach(([p, col], k) => {
+          const rg = el("radialGradient", { id: "lm-b" + x + k }, defs);
+          el("stop", { offset: "0%", "stop-color": col }, rg); el("stop", { offset: "100%", "stop-color": col, "stop-opacity": 0.15 }, rg);
+          el("circle", { cx: p.x, cy: p.y, r: 15, fill: "url(#lm-b" + x + k + ")", opacity: on ? 0.9 : 0.35 });
+        });
+      },
+      function blackHole(x, y, c, on) {     // after 60
+        const rg = el("radialGradient", { id: "lm-h" + x }, defs);
+        el("stop", { offset: "0%", "stop-color": "#eef0ff", "stop-opacity": 0 }, rg);
+        el("stop", { offset: "78%", "stop-color": "#eef0ff", "stop-opacity": 0 }, rg);
+        el("stop", { offset: "90%", "stop-color": GOLD, "stop-opacity": on ? 0.55 : 0.2 }, rg);
+        el("stop", { offset: "100%", "stop-color": GOLD, "stop-opacity": 0 }, rg);
+        el("circle", { cx: x, cy: y, r: 48, fill: "url(#lm-h" + x + ")" });
+        el("ellipse", { cx: x, cy: y, rx: 58, ry: 10, fill: "none", stroke: GOLD, "stroke-width": 1.2, opacity: on ? 0.45 : 0.15, transform: "rotate(-14 " + x + " " + y + ")" });
+        el("circle", { cx: x, cy: y, r: 22, fill: "#000" });
+        el("circle", { cx: x, cy: y, r: 23, fill: "none", stroke: "#eef0ff", "stroke-width": 1.2, opacity: on ? 0.8 : 0.3 });
+      },
+      function comet(x, y, c, on) {         // after 80
+        const lg = el("linearGradient", { id: "lm-c" + x, gradientUnits: "userSpaceOnUse", x1: x, y1: y, x2: x + 110, y2: y - 70 }, defs);
+        el("stop", { offset: "0%", "stop-color": COLS[3], "stop-opacity": on ? 0.7 : 0.25 }, lg);
+        el("stop", { offset: "100%", "stop-color": COLS[3], "stop-opacity": 0 }, lg);
+        el("path", { d: "M" + x + " " + (y - 8) + " L" + (x + 110) + " " + (y - 70) + " L" + x + " " + (y + 8) + " Z", fill: "url(#lm-c" + x + ")" });
+        el("circle", { cx: x, cy: y, r: 9, fill: COLS[3], opacity: on ? 1 : 0.4 });
+        el("circle", { cx: x, cy: y, r: 16, fill: COLS[3], opacity: on ? 0.25 : 0.08 });
+      },
+      function summit(x, y, c, on) {        // after 100: the ring itself
+        el("circle", { cx: x, cy: y, r: 34, fill: GOLD, opacity: on ? 0.18 : 0.06 });
+        el("circle", { cx: x, cy: y, r: 26, fill: "none", stroke: GOLD, "stroke-width": 3, opacity: on ? 1 : 0.35 });
+        el("circle", { cx: x, cy: y, r: 9, fill: COLS[1], opacity: on ? 1 : 0.35 });
+      },
+    ];
+    for (let b = 1; b * 20 <= total; b++) {
+      const idx = Math.min(total - 1, b * 20 - 1);          // last level of the band
+      const p = nodePos(idx), on = !!save.stars[idx] || unlockAll;
+      const draw = LANDMARKS[Math.min(LANDMARKS.length - 1, b - 1)];
+      const isEnd = b * 20 === total;
+      if (isEnd) draw(J.w / 2, p.y - 80, null, on);
+      else { const side = p.x > J.w / 2 ? -1 : 1; draw(Math.max(70, Math.min(J.w - 70, p.x + side * 120)), p.y - 42, null, on); }
+    }
+    if (total % 20 !== 0) { const p = nodePos(total - 1); LANDMARKS[4](J.w / 2, p.y - 80, null, !!save.stars[total - 1] || unlockAll); }
+
+    // road: full length faint, travelled part lit
+    el("path", { d: roadPath(0, shown - 1), fill: "none", stroke: "#2a2f5a", "stroke-width": 3, "stroke-linecap": "round" });
+    if (frontier > 0) {
+      const lit = el("path", { d: roadPath(0, frontier), fill: "none", stroke: "url(#lit)", "stroke-width": 3, "stroke-linecap": "round" });
+      const lg = el("linearGradient", { id: "lit", gradientUnits: "userSpaceOnUse", x1: 0, y1: nodePos(0).y, x2: 0, y2: nodePos(frontier).y }, defs);
+      el("stop", { offset: "0%", "stop-color": COLS[0] }, lg);
+      el("stop", { offset: "100%", "stop-color": COLS[1] }, lg);
+      lit.setAttribute("opacity", 0.85);
+    }
+
+    // nodes
+    LEVELS.forEach((lv, i) => {
+      if (i >= shown) return;
+      const p = nodePos(i), st = save.stars[i] || 0, open = unlocked(i), isCur = i === frontier;
+      const g = el("g", { class: "node" + (open ? "" : " locked"), transform: "translate(" + p.x + " " + p.y + ")" });
+      const hasNew = (lv.gates && lv.gates.length && !LEVELS.slice(0, i).some((l) => l.gates && l.gates.length)) ||
+                     (lv.planets.some((q) => q.move) && !LEVELS.slice(0, i).some((l) => l.planets.some((q) => q.move)));
+      if (st) {
+        el("circle", { r: 20, fill: TINTS[Math.min(TINTS.length - 1, Math.floor(i / 20))].bg }, g);
+        el("circle", { r: 16, fill: COLS[1], opacity: 0.18 }, g);
+        el("circle", { r: 16, fill: "none", stroke: COLS[1], "stroke-width": 2 }, g);
+      } else if (isCur) {
+        el("circle", { r: 20, fill: TINTS[Math.min(TINTS.length - 1, Math.floor(i / 20))].bg }, g);
+        el("circle", { r: 16, fill: GOLD, opacity: 0.15 }, g);
+        el("circle", { r: 16, fill: "none", stroke: GOLD, "stroke-width": 2.5 }, g);
+        const halo = el("circle", { r: 22, fill: "none", stroke: GOLD, "stroke-width": 1.5, opacity: 0.6 }, g);
+        const an = el("animate", { attributeName: "r", values: "20;27;20", dur: "2.2s", repeatCount: "indefinite" }, halo);
+        el("animate", { attributeName: "opacity", values: "0.6;0;0.6", dur: "2.2s", repeatCount: "indefinite" }, halo);
+        void an;
+        el("text", { y: 38, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 2, opacity: 0.8 }, g).textContent = "TAP TO PLAY";
+      } else {
+        // locked, ahead on the road: a small dark bead, numbered faintly
+        el("circle", { r: 20, fill: TINTS[Math.min(TINTS.length - 1, Math.floor(i / 20))].bg }, g);
+        el("circle", { r: open ? 14 : 10, fill: "#0b0e22", stroke: "#2a2f5a", "stroke-width": 1.5 }, g);
+        if (!open) el("text", { y: 3.5, "text-anchor": "middle", "font-size": 9, fill: "#3a4080" }, g).textContent = i + 1;
+      }
+      if (open) {
+        el("text", { y: 5, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: st ? "#eef0ff" : isCur ? GOLD : "#7d82ad" }, g).textContent = i + 1;
+        if (st) el("text", { y: 34, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "★".repeat(st) + "☆".repeat(3 - st);
+        // no names on the map; only flag a level that brings something new
+        const side = p.x > J.w / 2 ? -1 : 1;
+        if (hasNew && !st) el("text", { x: side * 30, y: 4, "text-anchor": side < 0 ? "end" : "start", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "SOMETHING NEW";
+        g.addEventListener("click", () => { loadLevel(i); showScreen(null); });
+      }
+    });
+    host.appendChild(svg);
+    // start the view on the current level, a little below centre so the road ahead shows
+    const target = nodePos(frontier).y * (host.clientWidth / J.w) - host.clientHeight * 0.58;
+    host.scrollTop = Math.max(0, target);
+    let stars = 0; for (const k in save.stars) stars += save.stars[k];
+    $("map-stars").textContent = stars + " ★";
   }
   function renderPips() {
     pipsEl.innerHTML = "";
@@ -340,7 +504,7 @@
   }));
 
   loadLevel(0);
-  showScreen("title");
+  showScreen("levels");
   requestAnimationFrame(loop);
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

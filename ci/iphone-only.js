@@ -12,8 +12,10 @@ try {
   proj.parseSync();
   proj.updateBuildProperty("TARGETED_DEVICE_FAMILY", '"1"');
   proj.updateBuildProperty("MARKETING_VERSION", VERSION);
+  // Apple requires iOS 15+ from Spring 2027 (ITMS-90068); Capacitor's template says 13.
+  proj.updateBuildProperty("IPHONEOS_DEPLOYMENT_TARGET", "15.0");
   fs.writeFileSync(PBXPROJ, proj.writeSync());
-  console.log("Set TARGETED_DEVICE_FAMILY = 1 (iPhone only) and MARKETING_VERSION = " + VERSION);
+  console.log("Set TARGETED_DEVICE_FAMILY = 1 (iPhone only), MARKETING_VERSION = " + VERSION + ", IPHONEOS_DEPLOYMENT_TARGET = 15.0");
 } catch (e) {
   console.warn("iphone-only: could not patch project -", e.message);
 }

@@ -54,10 +54,23 @@ workflows:
         script: node ci/configure-audio.js
       - name: Generate app icon & splash
         script: npx capacitor-assets generate --ios || true
-      - name: Install CocoaPods
-        script: cd ios/App && pod install
+      - name: Install CocoaPods (iOS 15 minimum, matching the app target)
+        script: |
+          cd ios/App
+          sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '15.0'/" Podfile
+          pod install
       - name: Fetch signing files & set up keychain (uses the API key)
         script: |
+          # Sign for exactly the bundle id the generated Xcode project uses,
+          # and fail loudly here (not at archive time) if no profile applies.
+          for v in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY; do
+            if [ -z "${!v}" ]; then echo "Missing secure variable $v: attach the 'appstore' variable group to this app in Codemagic."; exit 1; fi
+          done
+          DETECTED=$(xcode-project detect-bundle-id)
+          echo "Project bundle id: $DETECTED   (expected: $BUNDLE_ID)"
+          if [ "$DETECTED" != "$BUNDLE_ID" ]; then
+            echo "Bundle id mismatch between capacitor.config.json and codemagic.yaml"; exit 1
+          fi
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
@@ -65,6 +78,7 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" || true
       - name: Set build number (Codemagic's monotonic build counter)
         script: |
           cd ios/App

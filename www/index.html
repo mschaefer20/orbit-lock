@@ -26,15 +26,6 @@
     <div class="board-wrap">
       <canvas id="board" width="420" height="640" aria-label="Game board"></canvas>
 
-      <!-- Title -->
-      <section id="screen-title" class="screen">
-        <h2 class="logo">ORBIT<br>LOCK</h2>
-        <p class="tagline">One button. Every planet.</p>
-        <button class="btn" data-action="play">Play</button>
-        <button class="btn ghost" data-action="levels">Levels</button>
-        <button class="btn ghost" data-action="howto">How to Play</button>
-      </section>
-
       <!-- How to play -->
       <section id="screen-howto" class="screen hidden">
         <h2>How to Play</h2>
@@ -48,12 +39,14 @@
         <button class="btn" data-action="back">Back</button>
       </section>
 
-      <!-- Level select -->
-      <section id="screen-levels" class="screen hidden">
-        <h2>Levels</h2>
-        <p id="levels-summary" class="tagline"></p>
-        <div id="level-grid" class="level-grid"></div>
-        <button class="btn ghost" data-action="back">Back</button>
+      <!-- Home: the journey map -->
+      <section id="screen-levels" class="screen">
+        <header class="map-head">
+          <h2 class="logo small">ORBIT LOCK</h2>
+          <span id="map-stars" class="map-stars"></span>
+          <button class="icon-btn slim" data-action="howto" aria-label="How to play" title="How to play">?</button>
+        </header>
+        <div id="journey" class="journey"></div>
       </section>
 
       <!-- Win -->
@@ -63,7 +56,7 @@
         <p id="win-text" class="tagline"></p>
         <button class="btn" data-action="next">Next</button>
         <button class="btn ghost" data-action="retry">Retry</button>
-        <button class="btn ghost" data-action="levels">Levels</button>
+        <button class="btn ghost" data-action="levels">Map</button>
       </section>
     </div>
 
