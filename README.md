@@ -51,7 +51,8 @@ Canvas is 420 x 640. Planets, walls, and leaving the screen are fatal.
 proven by the solver and sorted by difficulty inside fixed blocks
 (17-40, 41-70, 71-100, 101-130, ...). Blocks introduce elements quietly:
 walls and orbit starts early, checkpoint gates from the second block,
-drifting planets from the third. Names run from near space to deep sky.
+drifting planets from the third. Level names exist only in the data and
+tool output; the game never shows them.
 
 - `node tools/gen.js` — regenerate everything up to `--count` (default 100).
   Slots already in levels.js are kept unless `--from A --to B` names them.

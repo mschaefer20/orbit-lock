@@ -79,7 +79,7 @@
   // ---- DOM -----------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
   const screens = ["howto", "levels", "win"].reduce((m, k) => (m[k] = $("screen-" + k), m), {});
-  const hudLevel = $("hud-level"), hudName = $("hud-name"), pipsEl = $("pips"), footer = $("footer-hint");
+  const hudLevel = $("hud-level"), pipsEl = $("pips"), footer = $("footer-hint");
   let current = "levels", returnTo = "levels";
   function showScreen(name) {
     if (name === "howto" && current !== "howto") returnTo = current;
@@ -362,8 +362,7 @@
     if (!keepGhost) ghost = [];
     trail = [{ x: s.x, y: s.y, a: s.active }];
     acc = 0; lostAt = 0; wonAt = 0; winShown = false; flash = 0;
-    hudLevel.textContent = "Level " + (i + 1);
-    hudName.textContent = level.name;
+    hudLevel.textContent = i + 1;
     renderPips(); setFooter();
   }
   function reset() { ghost = trail.length > 2 ? trail : ghost; loadLevel(levelIndex, true); }
