@@ -68,8 +68,10 @@ html, body {
   background: transparent;
   transition: background 0.15s, transform 0.15s;
 }
-.pip.on { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
-.pip.spent { transform: scale(0.7); opacity: 0.45; }
+.pip.gold { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.pip.spare { border-color: var(--muted); background: var(--muted); }
+.pip.first-spare { margin-left: 5px; }
+.pip.spent { background: transparent; box-shadow: none; transform: scale(0.7); opacity: 0.45; }
 
 .board-wrap {
   position: relative;

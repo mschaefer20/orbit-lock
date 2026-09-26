@@ -14,7 +14,12 @@
   let save = { stars: {} };
   try { save = Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}")); } catch (_) {}
   function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) {} }
-  const unlockAll = /[?&]all([=&]|$)/.test(location.search);
+  // Dev mode unlocks every level. Toggle: tap the map logo 7 times quickly
+  // (persists), or add ?all to the URL (this visit only).
+  const DEV_KEY = "orbitlock.dev";
+  let devMode = false;
+  try { devMode = localStorage.getItem(DEV_KEY) === "1"; } catch (_) {}
+  let unlockAll = devMode || /[?&]all([=&]|$)/.test(location.search);
   function unlocked(i) { return unlockAll || i === 0 || !!save.stars[i - 1]; }
 
   // ---- HiDPI ---------------------------------------------------------------
@@ -335,9 +340,11 @@
   }
   function renderPips() {
     pipsEl.innerHTML = "";
+    // gold pips = the level's answer (par); spare pips after them each cost a star.
+    // Taps use gold first, then spares, left to right.
     for (let i = 0; i < level.taps; i++) {
       const d = document.createElement("span");
-      d.className = "pip " + (i < level.taps - s.taps ? "on" : "spent");
+      d.className = "pip " + (i < level.par ? "gold" : "spare") + (i < s.taps ? " spent" : "") + (i === level.par ? " first-spare" : "");
       pipsEl.appendChild(d);
     }
   }
@@ -350,8 +357,8 @@
     return null;
   }
   function setFooter() {
-    if (s.status === "idle") footer.textContent = level.hint || firstHint() || (level.taps ? "Tap to launch · par " + level.par : "Tap to launch");
-    else if (s.status === "live") footer.textContent = s.taps < level.taps ? "Tap to switch pull" : "No taps left";
+    if (s.status === "idle") footer.textContent = level.hint || firstHint() || "Tap to launch";
+    else if (s.status === "live") footer.textContent = s.taps >= level.taps ? "No taps left" : s.taps >= level.par && level.par < level.taps ? "Spare taps cost a star" : "Tap to switch pull";
     else footer.textContent = "";
   }
 
@@ -379,10 +386,11 @@
   }
 
   function onWin() {
-    const n = s.taps <= level.par ? 3 : s.taps <= level.par + 1 ? 2 : 1;
+    const spares = Math.max(0, s.taps - level.par);
+    const n = Math.max(1, 3 - spares);
     if ((save.stars[levelIndex] || 0) < n) { save.stars[levelIndex] = n; persist(); }
     $("win-stars").innerHTML = starStr(n);
-    $("win-text").textContent = s.taps + " tap" + (s.taps === 1 ? "" : "s") + " · par " + level.par;
+    $("win-text").textContent = spares ? spares + " spare tap" + (spares === 1 ? "" : "s") + " used" : "Perfect — no spares";
     const nextBtn = screens.win.querySelector("[data-action=next]");
     nextBtn.disabled = levelIndex + 1 >= LEVELS.length;
     showScreen("win");
@@ -552,6 +560,16 @@
   });
   $("btn-restart").addEventListener("click", () => { if (playing) reset(); });
   $("btn-levels").addEventListener("click", () => showScreen("levels"));
+  let logoTaps = [];
+  document.querySelector(".map-head .logo").addEventListener("click", () => {
+    const now = Date.now();
+    logoTaps = logoTaps.filter((t) => now - t < 2500); logoTaps.push(now);
+    if (logoTaps.length < 7) return;
+    logoTaps = [];
+    devMode = !devMode; unlockAll = devMode;
+    try { devMode ? localStorage.setItem(DEV_KEY, "1") : localStorage.removeItem(DEV_KEY); } catch (_) {}
+    buildLevelGrid();
+  });
   document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", () => {
     const a = b.dataset.action;
     if (a === "play") { let i = 0; while (i < LEVELS.length - 1 && save.stars[i]) i++; loadLevel(i); showScreen(null); }

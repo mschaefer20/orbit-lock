@@ -3,7 +3,9 @@
 A one-button gravity puzzle, spun off from Tidal Orbit's "Binary" mechanic.
 The orb is pulled toward the active planet; a tap switches the pull to the
 next planet in the level's order. Reach the gold ring within the tap budget.
-Fewer taps = more stars.
+The HUD shows the budget as pips: `par` gold pips, then `taps - par` grey
+spares. Finishing on gold = 3 stars; each spare used costs one (min 1).
+The word "par" never appears in the game.
 
 Plain HTML/CSS/JS, no bundler. `physics.js` is shared by the game and the
 level tools, so a tap sequence replays identically in both.
