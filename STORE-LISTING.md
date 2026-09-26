@@ -10,7 +10,7 @@ The app itself, icon and home-screen label still say Orbit Lock.)
 `One button. Every planet.`
 
 ## Promotional text (170 char max, editable anytime)
-`Flip gravity between planets and swing into the ring. 100 hand-tuned puzzles, one button, fewer taps for more stars.`
+`Flip gravity between planets and swing into the ring. 100 puzzles, one button, and only as many taps as you need.`
 
 ## Description
 ```
@@ -21,7 +21,8 @@ next planet. That is the whole control scheme, but the orb keeps its momentum,
 so every tap is a decision: too early and you drift into space, too late and
 you crash.
 
-Reach the gold ring within the tap budget. Fewer taps means more stars.
+Reach the gold ring before your taps run out. Every level gives you exactly
+as many taps as it needs, and not one more.
 
 • 100 levels, every one proven solvable
 • One-button, pick-up-and-play controls

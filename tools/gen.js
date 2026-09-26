@@ -6,9 +6,10 @@
 
    Per slot: sample a layout from the block's profile -> rasterize every
    k-tap trajectory onto a grid -> pick a goal cell that is reached by a
-   healthy number of exactly-par sequences and by none with fewer taps ->
+   healthy number of exactly-k sequences and by none with fewer taps ->
    (optionally) drop a checkpoint gate on the winning paths -> confirm with
    the exact solver and the difficulty window -> keep, else retry.
+   taps = k is a hard limit: the level needs every tap it gives you.
 
    Usage: node tools/gen.js [--count 100] [--from 17] [--to 100] [--dry]
    --from/--to regenerate only those slots (others are read from levels.js). */
@@ -40,42 +41,12 @@ function blockRange(b) { return b === 0 ? [17, 40] : [41 + (b - 1) * 30, 70 + (b
 function profile(slot) {
   const b = blockOf(slot); const [lo, hi] = blockRange(b); const u = (slot - lo) / (hi - lo); // 0..1 within block
   if (b === 0) return { planets: [2, u < 0.5 ? 3 : 4], walls: u < 0.3 ? 0 : 1, orbit: 0.35, gates: 0, movers: 0,
-    par: [1, u < 0.4 ? 2 : 3], ways: [10 + Math.round(20 * (1 - u)), 90] };
+    taps: [1, u < 0.4 ? 2 : 3], ways: [10 + Math.round(20 * (1 - u)), 90] };
   if (b === 1) return { planets: [2, 4], walls: u < 0.5 ? 1 : 2, orbit: 0.45, gates: u < 0.15 ? 0 : (u < 0.7 ? 1 : 2), movers: 0,
-    par: [u < 0.3 ? 1 : 2, 3], ways: [6 + Math.round(8 * (1 - u)), 45] };
+    taps: [u < 0.3 ? 1 : 2, 3], ways: [6 + Math.round(8 * (1 - u)), 45] };
   const extra = b - 2; // every later block nudges harder
   return { planets: [3, 5], walls: 2, orbit: 0.5, gates: u < 0.5 ? 1 : 2, movers: u < 0.2 ? 1 : 2,
-    par: [2, Math.min(4, 3 + (u > 0.6 ? 1 : 0) + Math.min(1, extra))], ways: [Math.max(3, 5 - extra), 28 - 3 * Math.min(4, extra)] };
-}
-
-// ---- names: near space -> deep space -----------------------------------------
-const NAMES = [
-  // block 0 (24): home system
-  "Tide", "Ebb", "Apogee", "Perigee", "Umbra", "Halo", "Crescent", "Gibbous", "Zenith", "Nadir", "Lagrange", "Syzygy",
-  "Transit", "Occult", "Libration", "Meridian", "Aphelion", "Perihelion", "Equinox", "Solstice", "Corona", "Flare", "Ecliptic", "Terminator",
-  // block 1 (30): the belt and the giants
-  "Ceres", "Vesta", "Pallas", "Kirkwood", "Trojan", "Hilda", "Callisto", "Ganymede", "Europa", "Io", "Amalthea", "Tethys",
-  "Enceladus", "Mimas", "Rhea", "Titan", "Iapetus", "Cassini", "Encke", "Roche", "Miranda", "Ariel", "Umbriel", "Oberon",
-  "Triton", "Nereid", "Charon", "Sedna", "Eris", "Kuiper",
-  // block 2 (30): out among the stars
-  "Oort", "Heliopause", "Proxima", "Centauri", "Barnard", "Sirius", "Procyon", "Vega", "Altair", "Deneb", "Arcturus", "Aldebaran",
-  "Rigel", "Betelgeuse", "Antares", "Spica", "Polaris", "Capella", "Castor", "Pollux", "Mizar", "Alcor", "Algol", "Albireo",
-  "Pleiades", "Hyades", "Praesepe", "Orion", "Carina", "Cygnus",
-  // block 3 (30): deep sky
-  "Nebula", "Pulsar", "Magnetar", "Quasar", "Blazar", "Cepheid", "Nova", "Supernova", "Remnant", "Accretion", "Horizon", "Singularity",
-  "Andromeda", "Triangulum", "Whirlpool", "Sombrero", "Pinwheel", "Cartwheel", "Antennae", "Sculptor", "Fornax", "Draco",
-  "Virgo", "Coma", "Laniakea", "Void", "Filament", "Redshift", "Relic", "Dawn",
-];
-function nameFor(slot, r) {
-  const b = blockOf(slot); const [lo, hi] = blockRange(b);
-  const start = b === 0 ? 0 : 24 + (b - 1) * 30;
-  const pool = NAMES.slice(start, start + (hi - lo + 1));
-  if (pool.length === hi - lo + 1) { // seeded shuffle of the block's pool, index by position
-    const sh = pool.slice(); const rr = rng(1000 + b);
-    for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(rr() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; }
-    return sh[slot - lo];
-  }
-  return "Sector " + slot;
+    taps: [2, Math.min(4, 3 + (u > 0.6 ? 1 : 0) + Math.min(1, extra))], ways: [Math.max(3, 5 - extra), 28 - 3 * Math.min(4, extra)] };
 }
 
 // ---- geometry helpers --------------------------------------------------------
@@ -190,7 +161,7 @@ function reachGrid(lv, maxK, r) {
 // ---- goal + gate choice ------------------------------------------------------
 function chooseGoal(lv, grids, prof, r) {
   const cands = [];
-  const [pmin, pmax] = prof.par;
+  const [pmin, pmax] = prof.taps;
   for (let k = Math.max(1, pmin); k <= pmax; k++) {
     if (!grids[k]) continue;
     for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) {
@@ -205,17 +176,17 @@ function chooseGoal(lv, grids, prof, r) {
     }
   }
   if (!cands.length) return null;
-  // prefer the higher par values a little, then random
+  // prefer the higher tap counts a little, then random
   cands.sort((a, b) => b.k - a.k);
   const top = cands.filter((c) => c.k === cands[0].k);
   const pool = r.chance(0.7) ? top : cands;
   return r.pick(pool);
 }
-function chooseGates(lv, par, count, r) {
-  // cells visited (before the goal) by par-tap winners; gates go on well-trodden ones
-  const probe = Object.assign({}, lv, { taps: par, gates: undefined });
+function chooseGates(lv, count, r) {
+  // cells visited (before the goal) by winners; gates go on well-trodden ones
+  const probe = Object.assign({}, lv, { gates: undefined });
   const freq = new Uint16Array(CW * CH); let wins = 0;
-  for (const seq of sequences(par, r)) {
+  for (const seq of sequences(lv.taps, r)) {
     const seen = new Uint8Array(CW * CH);
     const s = runSeq(probe, seq, (cx, cy) => { if (cx >= 0 && cy >= 0 && cx < CW && cy < CH) seen[cy * CW + cx] = 1; });
     if (s.status !== "won") continue;
@@ -241,10 +212,10 @@ function chooseGates(lv, par, count, r) {
 // ---- verification ------------------------------------------------------------
 function verify(lv, prof) {
   const res = solve(lv);
-  if (res.min === null || res.min !== lv.par) return null;
-  let atPar = 0; for (const k in res.found) if (Number(k) <= lv.par) atPar += res.found[k];
-  if (atPar < prof.ways[0] || atPar > prof.ways[1] * 2) return null;
-  return { atPar, example: res.example[res.min] };
+  if (res.min === null || res.min !== lv.taps) return null;
+  let ways = 0; for (const k in res.found) ways += res.found[k];
+  if (ways < prof.ways[0] || ways > prof.ways[1] * 2) return null;
+  return { ways, example: res.example[res.min] };
 }
 
 // ---- one slot ------------------------------------------------------------------
@@ -253,13 +224,13 @@ function generate(slot) {
   for (let attempt = 0; attempt < 80; attempt++) {
     const r = rng(slot * 7919 + attempt * 104729 + 17);
     const lv = sampleLayout(r, prof); if (!lv) continue;
-    const grids = reachGrid(lv, prof.par[1], r);
+    const grids = reachGrid(lv, prof.taps[1], r);
     const goal = chooseGoal(lv, grids, prof, r); if (!goal) continue;
     lv.goal = { x: goal.x, y: goal.y, r: r.int(22, 28) };
-    lv.par = goal.k; lv.taps = lv.par + (lv.par <= 2 ? 2 : 1);
-    if (prof.gates) { const gs = chooseGates(lv, lv.par, prof.gates, r); if (gs) lv.gates = gs; }
+    lv.taps = goal.k;
+    if (prof.gates) { const gs = chooseGates(lv, prof.gates, r); if (gs) lv.gates = gs; }
     const v = verify(lv, prof); if (!v) continue;
-    const out = { name: nameFor(slot, r), taps: lv.taps, par: lv.par, seed: slot * 7919 + attempt * 104729 + 17, ways: v.atPar,
+    const out = { taps: lv.taps, seed: slot * 7919 + attempt * 104729 + 17, ways: v.ways,
       start: lv.start, active: lv.active };
     if (lv.v0) out.v0 = lv.v0;
     out.planets = lv.planets; if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates;
@@ -274,7 +245,7 @@ function fmt(v) { return JSON.stringify(v).replace(/"(\w+)":/g, "$1: ").replace(
 function serialize(levels) {
   const lines = levels.map((lv, i) => {
     const o = Object.assign({}, lv); const gen = "seed" in o;
-    const head = `  // ${i + 1}\n  { name: ${JSON.stringify(o.name)}, taps: ${o.taps}, par: ${o.par}` + (o.hint ? `, hint: ${JSON.stringify(o.hint)}` : "") + (gen ? `, seed: ${o.seed}, ways: ${o.ways}` : "") + ",";
+    const head = `  // ${i + 1}\n  { taps: ${o.taps}` + (o.hint ? `, hint: ${JSON.stringify(o.hint)}` : "") + (gen ? `, seed: ${o.seed}, ways: ${o.ways}` : "") + ",";
     const body = [];
     body.push(`    start: ${fmt(o.start)}` + (o.v0 ? `, v0: ${fmt(o.v0)}` : "") + `, active: ${o.active || 0},`);
     body.push(`    planets: [${o.planets.map(fmt).join(", ")}],`);
@@ -306,18 +277,16 @@ for (let slot = HANDMADE.length + 1; slot <= COUNT; slot++) {
   const lv = generate(slot);
   if (!lv) { console.error(`slot ${slot}: FAILED to generate`); process.exitCode = 1; if (prev) levels.push(prev); continue; }
   levels.push(lv);
-  console.log(`${String(slot).padStart(3)} ${lv.name.padEnd(12)} par=${lv.par} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((p) => p.move).length} ${((Date.now() - ts) / 1000).toFixed(1)}s`);
+  console.log(`${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((p) => p.move).length} ${((Date.now() - ts) / 1000).toFixed(1)}s`);
 }
-// sort each generated block by a difficulty score (par dominates, fewer ways = harder).
+// sort each generated block by a difficulty score (taps dominate, fewer ways = harder).
 // A partial reroll (--from/--to) keeps slots in place so the rest of the block is untouched.
 const REROLL = FROM > HANDMADE.length + 1 || TO < COUNT;
-function score(lv) { return lv.par * 100 - Math.min(60, lv.ways) + (lv.gates ? lv.gates.length * 12 : 0) + lv.planets.filter((p) => p.move).length * 8 + lv.planets.length * 3; }
+function score(lv) { return lv.taps * 100 - Math.min(60, lv.ways) + (lv.gates ? lv.gates.length * 12 : 0) + lv.planets.filter((p) => p.move).length * 8 + lv.planets.length * 3; }
 for (let b = 0; ; b++) {
   const [lo, hi] = blockRange(b); if (lo > levels.length) break;
   const a = lo - 1, z = Math.min(hi, levels.length);
   const seg = levels.slice(a, z);
   if (!REROLL && seg.every((l) => "seed" in l)) { seg.sort((x, y) => score(x) - score(y)); levels.splice(a, seg.length, ...seg); }
 }
-// names follow the final slot so the near->deep progression holds after sorting
-levels.forEach((lv, i) => { if ("seed" in lv) lv.name = nameFor(i + 1, null); });
 if (!DRY) { fs.writeFileSync(OUT, serialize(levels)); console.log(`wrote ${OUT} (${levels.length} levels) in ${((Date.now() - t0) / 1000).toFixed(0)}s`); }

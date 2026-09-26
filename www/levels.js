@@ -4,289 +4,289 @@
    by tools/solve.js. Canvas 420 x 640; taps cycle planets in array order. */
 const LEVELS = [
   // 1
-  { name: "Drop", taps: 0, par: 0, hint: "Tap to launch. Gravity does the rest.",
+  { taps: 0, hint: "Tap to launch. Gravity does the rest.",
     start: { x: 210, y: 110 }, active: 0,
     planets: [{ x: 210, y: 540, r: 36 }],
     goal: { x: 210, y: 360, r: 26 } },
 
   // 2
-  { name: "Flip", taps: 2, par: 1, hint: "Tap again to switch which planet pulls you.",
+  { taps: 1, hint: "Tap again to switch which planet pulls you.",
     start: { x: 210, y: 100 }, active: 0,
     planets: [{ x: 70, y: 330, r: 30 }, { x: 300, y: 330, r: 30 }],
     goal: { x: 350, y: 450, r: 34 } },
 
   // 3
-  { name: "Moons", taps: 2, par: 1, hint: "You start in orbit. Break it when the time is right.",
+  { taps: 1, hint: "You start in orbit. Break it when the time is right.",
     start: { x: 50, y: 330 }, v0: { x: 0, y: -260 }, active: 1,
     planets: [{ x: 180, y: 130, r: 26 }, { x: 180, y: 330, r: 26 }, { x: 180, y: 530, r: 26 }],
     goal: { x: 250, y: 510, r: 26 } },
 
   // 4
-  { name: "Slingshot", taps: 2, par: 1,
+  { taps: 1,
     start: { x: 60, y: 330 }, v0: { x: 0, y: -300 }, active: 0,
     planets: [{ x: 210, y: 330, r: 34 }, { x: 360, y: 560, r: 28 }],
     goal: { x: 300, y: 560, r: 26 } },
 
   // 5
-  { name: "Swing", taps: 3, par: 2, hint: "The dashed ring marks who pulls next.",
+  { taps: 2, hint: "The dashed ring marks who pulls next.",
     start: { x: 210, y: 100 }, active: 0,
     planets: [{ x: 70, y: 330, r: 30 }, { x: 350, y: 330, r: 30 }],
     goal: { x: 50, y: 430, r: 26 } },
 
   // 6
-  { name: "Eclipse", taps: 3, par: 2,
+  { taps: 2,
     start: { x: 60, y: 540 }, v0: { x: 0, y: -340 }, active: 0,
     planets: [{ x: 230, y: 360, r: 52 }, { x: 360, y: 110, r: 24 }],
     goal: { x: 130, y: 390, r: 26 } },
 
   // 7
-  { name: "Triangle", taps: 3, par: 2,
+  { taps: 2,
     start: { x: 210, y: 70 }, active: 0,
     planets: [{ x: 80, y: 360, r: 30 }, { x: 340, y: 360, r: 30 }, { x: 210, y: 590, r: 30 }],
     goal: { x: 210, y: 470, r: 24 } },
 
   // 8
-  { name: "Hook", taps: 3, par: 2,
+  { taps: 2,
     start: { x: 60, y: 60 }, active: 0,
     planets: [{ x: 330, y: 200, r: 30 }, { x: 110, y: 460, r: 30 }],
     walls: [{ x: 200, y: 330, w: 220, h: 16 }, { x: 200, y: 330, w: 16, h: 130 }],
     goal: { x: 350, y: 275, r: 24 } },
 
   // 9
-  { name: "Binary", taps: 2, par: 1,
+  { taps: 1,
     start: { x: 40, y: 320 }, v0: { x: 0, y: -300 }, active: 0,
     planets: [{ x: 210, y: 180, r: 34 }, { x: 210, y: 460, r: 34 }],
     goal: { x: 380, y: 320, r: 28 } },
 
   // 10
-  { name: "Comet", taps: 2, par: 1,
+  { taps: 1,
     start: { x: 40, y: 600 }, v0: { x: 300, y: -520 }, active: 0,
     planets: [{ x: 300, y: 220, r: 34 }, { x: 90, y: 300, r: 26 }],
     goal: { x: 130, y: 175, r: 28 } },
 
   // 11
-  { name: "Underpass", taps: 4, par: 3,
+  { taps: 3,
     start: { x: 60, y: 90 }, active: 0,
     planets: [{ x: 210, y: 300, r: 36 }, { x: 360, y: 120, r: 26 }, { x: 210, y: 600, r: 26 }],
     walls: [{ x: 0, y: 370, w: 150, h: 18 }, { x: 270, y: 370, w: 150, h: 18 }],
     goal: { x: 210, y: 402, r: 24 } },
 
   // 12
-  { name: "Corridor", taps: 4, par: 3,
+  { taps: 3,
     start: { x: 210, y: 50 }, active: 0,
     planets: [{ x: 60, y: 200, r: 26 }, { x: 360, y: 200, r: 26 }, { x: 60, y: 480, r: 26 }, { x: 360, y: 480, r: 26 }],
     walls: [{ x: 140, y: 330, w: 140, h: 16 }],
     goal: { x: 210, y: 600, r: 24 } },
 
   // 13
-  { name: "Diamond", taps: 4, par: 3,
+  { taps: 3,
     start: { x: 210, y: 40 }, active: 0,
     planets: [{ x: 60, y: 320, r: 26 }, { x: 210, y: 150, r: 26 }, { x: 360, y: 320, r: 26 }, { x: 210, y: 500, r: 26 }],
     walls: [{ x: 150, y: 250, w: 120, h: 14 }],
     goal: { x: 210, y: 330, r: 24 } },
 
   // 14
-  { name: "Pinball", taps: 3, par: 2,
+  { taps: 2,
     start: { x: 210, y: 40 }, active: 0,
     planets: [{ x: 90, y: 180, r: 24 }, { x: 330, y: 300, r: 24 }, { x: 90, y: 420, r: 24 }, { x: 330, y: 540, r: 24 }],
     goal: { x: 60, y: 600, r: 24 } },
 
   // 15
-  { name: "Spiral", taps: 4, par: 3,
+  { taps: 3,
     start: { x: 210, y: 320 }, v0: { x: 0, y: -380 }, active: 0,
     planets: [{ x: 210, y: 120, r: 26 }, { x: 380, y: 320, r: 26 }, { x: 210, y: 520, r: 26 }, { x: 40, y: 320, r: 26 }],
     goal: { x: 80, y: 560, r: 26 } },
 
   // 16
-  { name: "Cradle", taps: 3, par: 2,
+  { taps: 2,
     start: { x: 210, y: 90 }, active: 0,
     planets: [{ x: 50, y: 330, r: 28 }, { x: 370, y: 330, r: 28 }],
     walls: [{ x: 150, y: 400, w: 120, h: 16 }],
     goal: { x: 210, y: 480, r: 26 } },
 
   // 17
-  { name: "Occult", taps: 4, par: 2, seed: 480503, ways: 130,
+  { taps: 2, seed: 480503, ways: 130,
     start: { x: 245, y: 88 }, v0: { x: 313, y: 83 }, active: 1,
     planets: [{ x: 156, y: 536, r: 33 }, { x: 213, y: 208, r: 34 }],
     goal: { x: 370, y: 310, r: 26 } },
 
   // 18
-  { name: "Crescent", taps: 4, par: 2, seed: 996229, ways: 131,
+  { taps: 2, seed: 996229, ways: 131,
     start: { x: 88, y: 297 }, v0: { x: 284, y: 44 }, active: 2,
     planets: [{ x: 176, y: 449, r: 23 }, { x: 299, y: 235, r: 34 }, { x: 111, y: 145, r: 37 }],
     goal: { x: 370, y: 330, r: 27 } },
 
   // 19
-  { name: "Nadir", taps: 4, par: 2, seed: 464665, ways: 59,
+  { taps: 2, seed: 464665, ways: 59,
     start: { x: 305, y: 130 }, v0: { x: -267, y: -224 }, active: 0,
     planets: [{ x: 227, y: 224, r: 24 }, { x: 124, y: 442, r: 31 }, { x: 338, y: 319, r: 31 }],
     goal: { x: 350, y: 470, r: 22 } },
 
   // 20
-  { name: "Gibbous", taps: 4, par: 2, seed: 4533258, ways: 50,
+  { taps: 2, seed: 4533258, ways: 50,
     start: { x: 45, y: 215 }, active: 2,
     planets: [{ x: 71, y: 96, r: 28 }, { x: 221, y: 155, r: 24 }, { x: 364, y: 535, r: 30 }],
     goal: { x: 250, y: 210, r: 24 } },
 
   // 21
-  { name: "Umbra", taps: 4, par: 2, seed: 318559, ways: 41,
+  { taps: 2, seed: 318559, ways: 41,
     start: { x: 268, y: 302 }, active: 1,
     planets: [{ x: 358, y: 546, r: 29 }, { x: 87, y: 164, r: 30 }],
     goal: { x: 110, y: 230, r: 27 } },
 
   // 22
-  { name: "Perigee", taps: 4, par: 2, seed: 2067276, ways: 41,
+  { taps: 2, seed: 2067276, ways: 41,
     start: { x: 320, y: 151 }, active: 0,
     planets: [{ x: 180, y: 575, r: 36 }, { x: 77, y: 148, r: 38 }, { x: 183, y: 360, r: 28 }],
     goal: { x: 90, y: 350, r: 27 } },
 
   // 23
-  { name: "Flare", taps: 4, par: 2, seed: 826366, ways: 40,
+  { taps: 2, seed: 826366, ways: 40,
     start: { x: 264, y: 156 }, active: 1,
     planets: [{ x: 353, y: 398, r: 29 }, { x: 53, y: 553, r: 28 }, { x: 259, y: 510, r: 23 }],
     goal: { x: 370, y: 490, r: 27 } },
 
   // 24
-  { name: "Aphelion", taps: 4, par: 2, seed: 875662, ways: 37,
+  { taps: 2, seed: 875662, ways: 37,
     start: { x: 338, y: 208 }, v0: { x: 93, y: -329 }, active: 0,
     planets: [{ x: 114, y: 145, r: 47 }, { x: 165, y: 464, r: 32 }, { x: 240, y: 333, r: 22 }],
     goal: { x: 270, y: 410, r: 28 } },
 
   // 25
-  { name: "Ecliptic", taps: 4, par: 2, seed: 6489651, ways: 35,
+  { taps: 2, seed: 6489651, ways: 35,
     start: { x: 360, y: 250 }, v0: { x: -191, y: 289 }, active: 2,
     planets: [{ x: 351, y: 387, r: 22 }, { x: 101, y: 373, r: 27 }, { x: 202, y: 146, r: 26 }],
     goal: { x: 130, y: 470, r: 24 } },
 
   // 26
-  { name: "Syzygy", taps: 4, par: 2, seed: 593151, ways: 34,
+  { taps: 2, seed: 593151, ways: 34,
     start: { x: 146, y: 53 }, v0: { x: -346, y: 70 }, active: 1,
     planets: [{ x: 234, y: 426, r: 31 }, { x: 178, y: 210, r: 29 }, { x: 366, y: 231, r: 25 }],
     goal: { x: 150, y: 470, r: 23 } },
 
   // 27
-  { name: "Perihelion", taps: 4, par: 2, seed: 1446821, ways: 26,
+  { taps: 2, seed: 1446821, ways: 26,
     start: { x: 46, y: 454 }, active: 0,
     planets: [{ x: 229, y: 334, r: 25 }, { x: 349, y: 567, r: 27 }],
     goal: { x: 310, y: 290, r: 28 } },
 
   // 28
-  { name: "Libration", taps: 4, par: 2, seed: 486640, ways: 25,
+  { taps: 2, seed: 486640, ways: 25,
     start: { x: 269, y: 478 }, active: 1,
     planets: [{ x: 298, y: 160, r: 31 }, { x: 150, y: 214, r: 22 }],
     goal: { x: 150, y: 150, r: 26 } },
 
   // 29
-  { name: "Apogee", taps: 4, par: 2, seed: 769151, ways: 24,
+  { taps: 2, seed: 769151, ways: 24,
     start: { x: 322, y: 412 }, v0: { x: -256, y: 239 }, active: 0,
     planets: [{ x: 235, y: 319, r: 23 }, { x: 328, y: 548, r: 31 }],
     walls: [{ x: 5, y: 231, w: 130, h: 14 }],
     goal: { x: 270, y: 230, r: 27 } },
 
   // 30
-  { name: "Corona", taps: 4, par: 3, seed: 680260, ways: 142,
+  { taps: 3, seed: 680260, ways: 142,
     start: { x: 246, y: 450 }, active: 1,
     planets: [{ x: 353, y: 267, r: 34 }, { x: 103, y: 137, r: 28 }, { x: 70, y: 385, r: 34 }],
     goal: { x: 170, y: 130, r: 28 } },
 
   // 31
-  { name: "Lagrange", taps: 4, par: 3, seed: 494559, ways: 110,
+  { taps: 3, seed: 494559, ways: 110,
     start: { x: 44, y: 43 }, active: 1,
     planets: [{ x: 322, y: 552, r: 38 }, { x: 189, y: 396, r: 38 }, { x: 293, y: 240, r: 28 }],
     goal: { x: 90, y: 310, r: 27 } },
 
   // 32
-  { name: "Transit", taps: 4, par: 3, seed: 502478, ways: 159,
+  { taps: 3, seed: 502478, ways: 159,
     start: { x: 297, y: 475 }, active: 0,
     planets: [{ x: 150, y: 468, r: 23 }, { x: 258, y: 204, r: 38 }, { x: 67, y: 336, r: 38 }],
     goal: { x: 70, y: 510, r: 27 } },
 
   // 33
-  { name: "Ebb", taps: 4, par: 3, seed: 439126, ways: 58,
+  { taps: 3, seed: 439126, ways: 58,
     start: { x: 224, y: 235 }, active: 2,
     planets: [{ x: 333, y: 149, r: 54 }, { x: 186, y: 419, r: 36 }, { x: 80, y: 274, r: 36 }],
     walls: [{ x: 322, y: 417, w: 17, h: 140 }],
     goal: { x: 50, y: 350, r: 25 } },
 
   // 34
-  { name: "Halo", taps: 4, par: 3, seed: 447045, ways: 102,
+  { taps: 3, seed: 447045, ways: 102,
     start: { x: 245, y: 549 }, active: 3,
     planets: [{ x: 127, y: 469, r: 28 }, { x: 335, y: 144, r: 32 }, { x: 319, y: 466, r: 22 }, { x: 362, y: 311, r: 27 }],
     goal: { x: 350, y: 410, r: 24 } },
 
   // 35
-  { name: "Zenith", taps: 4, par: 3, seed: 615126, ways: 98,
+  { taps: 3, seed: 615126, ways: 98,
     start: { x: 117, y: 75 }, active: 2,
     planets: [{ x: 52, y: 168, r: 30 }, { x: 64, y: 434, r: 33 }, { x: 245, y: 328, r: 28 }, { x: 326, y: 97, r: 38 }],
     goal: { x: 70, y: 350, r: 23 } },
 
   // 36
-  { name: "Tide", taps: 4, par: 3, seed: 421506, ways: 111,
+  { taps: 3, seed: 421506, ways: 111,
     start: { x: 306, y: 390 }, active: 1,
     planets: [{ x: 246, y: 563, r: 54 }, { x: 66, y: 113, r: 34 }, { x: 306, y: 91, r: 26 }, { x: 69, y: 566, r: 28 }],
     goal: { x: 130, y: 530, r: 25 } },
 
   // 37
-  { name: "Equinox", taps: 4, par: 3, seed: 1300715, ways: 51,
+  { taps: 3, seed: 1300715, ways: 51,
     start: { x: 68, y: 435 }, v0: { x: -145, y: 218 }, active: 0,
     planets: [{ x: 250, y: 556, r: 36 }, { x: 81, y: 110, r: 28 }],
     goal: { x: 250, y: 270, r: 22 } },
 
   // 38
-  { name: "Meridian", taps: 4, par: 3, seed: 221749, ways: 35,
+  { taps: 3, seed: 221749, ways: 35,
     start: { x: 383, y: 464 }, v0: { x: -78, y: 245 }, active: 1,
     planets: [{ x: 136, y: 271, r: 30 }, { x: 217, y: 411, r: 37 }, { x: 338, y: 303, r: 28 }],
     goal: { x: 210, y: 590, r: 24 } },
 
   // 39
-  { name: "Terminator", taps: 4, par: 3, seed: 478721, ways: 26,
+  { taps: 3, seed: 478721, ways: 26,
     start: { x: 302, y: 295 }, active: 0,
     planets: [{ x: 257, y: 436, r: 30 }, { x: 326, y: 186, r: 23 }, { x: 140, y: 232, r: 26 }, { x: 110, y: 92, r: 27 }],
     walls: [{ x: 163, y: 339, w: 16, h: 148 }],
     goal: { x: 190, y: 90, r: 24 } },
 
   // 40
-  { name: "Solstice", taps: 4, par: 3, seed: 308858, ways: 20,
+  { taps: 3, seed: 308858, ways: 20,
     start: { x: 40, y: 390 }, v0: { x: -292, y: -21 }, active: 1,
     planets: [{ x: 157, y: 376, r: 38 }, { x: 56, y: 165, r: 28 }],
     walls: [{ x: 298, y: 323, w: 18, h: 146 }],
     goal: { x: 230, y: 330, r: 27 } },
 
   // 41
-  { name: "Callisto", taps: 4, par: 2, seed: 781425, ways: 88,
+  { taps: 2, seed: 781425, ways: 88,
     start: { x: 330, y: 213 }, active: 1,
     planets: [{ x: 182, y: 206, r: 45 }, { x: 110, y: 383, r: 34 }],
     gates: [{ x: 150, y: 130, r: 18 }],
     goal: { x: 190, y: 370, r: 24 } },
 
   // 42
-  { name: "Iapetus", taps: 4, par: 2, seed: 652939, ways: 12,
+  { taps: 2, seed: 652939, ways: 12,
     start: { x: 272, y: 559 }, active: 1,
     planets: [{ x: 359, y: 369, r: 35 }, { x: 345, y: 209, r: 30 }, { x: 71, y: 261, r: 28 }, { x: 172, y: 520, r: 34 }],
     gates: [{ x: 130, y: 470, r: 18 }],
     goal: { x: 90, y: 590, r: 24 } },
 
   // 43
-  { name: "Titan", taps: 4, par: 3, seed: 662640, ways: 79,
+  { taps: 3, seed: 662640, ways: 79,
     start: { x: 86, y: 108 }, v0: { x: -41, y: 287 }, active: 1,
     planets: [{ x: 125, y: 388, r: 32 }, { x: 299, y: 139, r: 37 }],
     goal: { x: 230, y: 470, r: 23 } },
 
   // 44
-  { name: "Encke", taps: 4, par: 3, seed: 437344, ways: 63,
+  { taps: 3, seed: 437344, ways: 63,
     start: { x: 231, y: 476 }, v0: { x: -85, y: -287 }, active: 3,
     planets: [{ x: 301, y: 531, r: 26 }, { x: 77, y: 376, r: 25 }, { x: 331, y: 248, r: 26 }, { x: 94, y: 517, r: 25 }],
     walls: [{ x: 92, y: 140, w: 205, h: 17 }],
     goal: { x: 270, y: 270, r: 24 } },
 
   // 45
-  { name: "Ceres", taps: 4, par: 3, seed: 984746, ways: 87,
+  { taps: 3, seed: 984746, ways: 87,
     start: { x: 269, y: 291 }, active: 0,
     planets: [{ x: 362, y: 211, r: 24 }, { x: 145, y: 315, r: 23 }, { x: 264, y: 515, r: 36 }, { x: 61, y: 426, r: 23 }],
     goal: { x: 70, y: 510, r: 28 } },
 
   // 46
-  { name: "Umbriel", taps: 4, par: 3, seed: 854478, ways: 72,
+  { taps: 3, seed: 854478, ways: 72,
     start: { x: 190, y: 257 }, active: 0,
     planets: [{ x: 172, y: 399, r: 29 }, { x: 61, y: 579, r: 33 }, { x: 102, y: 212, r: 27 }],
     walls: [{ x: 352, y: 324, w: 17, h: 175 }],
@@ -294,28 +294,28 @@ const LEVELS = [
     goal: { x: 190, y: 490, r: 26 } },
 
   // 47
-  { name: "Kuiper", taps: 4, par: 3, seed: 380129, ways: 89,
+  { taps: 3, seed: 380129, ways: 89,
     start: { x: 252, y: 381 }, v0: { x: -185, y: 190 }, active: 0,
     planets: [{ x: 369, y: 495, r: 44 }, { x: 136, y: 125, r: 36 }, { x: 312, y: 95, r: 29 }, { x: 164, y: 450, r: 37 }],
     gates: [{ x: 110, y: 410, r: 18 }],
     goal: { x: 90, y: 550, r: 26 } },
 
   // 48
-  { name: "Pallas", taps: 4, par: 3, seed: 1152827, ways: 82,
+  { taps: 3, seed: 1152827, ways: 82,
     start: { x: 333, y: 53 }, active: 0,
     planets: [{ x: 368, y: 293, r: 35 }, { x: 251, y: 529, r: 35 }, { x: 76, y: 222, r: 29 }, { x: 237, y: 189, r: 25 }],
     gates: [{ x: 330, y: 230, r: 18 }],
     goal: { x: 170, y: 250, r: 23 } },
 
   // 49
-  { name: "Nereid", taps: 4, par: 3, seed: 324696, ways: 45,
+  { taps: 3, seed: 324696, ways: 45,
     start: { x: 174, y: 178 }, active: 3,
     planets: [{ x: 291, y: 578, r: 33 }, { x: 366, y: 416, r: 32 }, { x: 133, y: 537, r: 27 }, { x: 333, y: 197, r: 28 }],
     walls: [{ x: 85, y: 331, w: 143, h: 14 }],
     goal: { x: 270, y: 470, r: 23 } },
 
   // 50
-  { name: "Enceladus", taps: 4, par: 3, seed: 506833, ways: 55,
+  { taps: 3, seed: 506833, ways: 55,
     start: { x: 44, y: 434 }, active: 3,
     planets: [{ x: 122, y: 525, r: 28 }, { x: 126, y: 118, r: 35 }, { x: 353, y: 180, r: 35 }, { x: 241, y: 398, r: 32 }],
     walls: [{ x: 119, y: 214, w: 141, h: 17 }, { x: 231, y: 506, w: 171, h: 16 }],
@@ -323,7 +323,7 @@ const LEVELS = [
     goal: { x: 230, y: 290, r: 22 } },
 
   // 51
-  { name: "Ariel", taps: 4, par: 3, seed: 538509, ways: 65,
+  { taps: 3, seed: 538509, ways: 65,
     start: { x: 67, y: 132 }, active: 1,
     planets: [{ x: 326, y: 548, r: 37 }, { x: 78, y: 371, r: 22 }],
     walls: [{ x: 331, y: 278, w: 18, h: 120 }],
@@ -331,21 +331,21 @@ const LEVELS = [
     goal: { x: 290, y: 410, r: 26 } },
 
   // 52
-  { name: "Io", taps: 4, par: 3, seed: 476939, ways: 50,
+  { taps: 3, seed: 476939, ways: 50,
     start: { x: 317, y: 244 }, active: 2,
     planets: [{ x: 263, y: 150, r: 34 }, { x: 116, y: 220, r: 37 }, { x: 213, y: 454, r: 22 }, { x: 314, y: 568, r: 38 }],
     gates: [{ x: 270, y: 350, r: 18 }],
     goal: { x: 90, y: 150, r: 25 } },
 
   // 53
-  { name: "Hilda", taps: 4, par: 3, seed: 451400, ways: 39,
+  { taps: 3, seed: 451400, ways: 39,
     start: { x: 247, y: 483 }, active: 0,
     planets: [{ x: 107, y: 456, r: 38 }, { x: 350, y: 387, r: 27 }, { x: 253, y: 256, r: 22 }],
     gates: [{ x: 290, y: 370, r: 18 }],
     goal: { x: 90, y: 590, r: 27 } },
 
   // 54
-  { name: "Miranda", taps: 4, par: 3, seed: 532372, ways: 32,
+  { taps: 3, seed: 532372, ways: 32,
     start: { x: 123, y: 59 }, v0: { x: -292, y: -25 }, active: 0,
     planets: [{ x: 103, y: 290, r: 34 }, { x: 200, y: 488, r: 25 }],
     walls: [{ x: 193, y: 100, w: 15, h: 201 }],
@@ -353,28 +353,28 @@ const LEVELS = [
     goal: { x: 310, y: 370, r: 25 } },
 
   // 55
-  { name: "Amalthea", taps: 4, par: 3, seed: 364291, ways: 33,
+  { taps: 3, seed: 364291, ways: 33,
     start: { x: 181, y: 487 }, active: 0,
     planets: [{ x: 332, y: 152, r: 27 }, { x: 358, y: 373, r: 32 }, { x: 123, y: 250, r: 25 }],
     gates: [{ x: 210, y: 310, r: 18 }],
     goal: { x: 250, y: 70, r: 23 } },
 
   // 56
-  { name: "Mimas", taps: 4, par: 3, seed: 864179, ways: 21,
+  { taps: 3, seed: 864179, ways: 21,
     start: { x: 340, y: 200 }, v0: { x: 294, y: -58 }, active: 0,
     planets: [{ x: 364, y: 323, r: 32 }, { x: 118, y: 145, r: 31 }, { x: 252, y: 494, r: 32 }, { x: 60, y: 318, r: 38 }],
     walls: [{ x: 279, y: 81, w: 16, h: 136 }],
     goal: { x: 110, y: 370, r: 22 } },
 
   // 57
-  { name: "Charon", taps: 4, par: 3, seed: 708372, ways: 45,
+  { taps: 3, seed: 708372, ways: 45,
     start: { x: 69, y: 132 }, active: 0,
     planets: [{ x: 213, y: 520, r: 35 }, { x: 310, y: 385, r: 37 }, { x: 203, y: 254, r: 27 }, { x: 365, y: 210, r: 25 }],
     gates: [{ x: 250, y: 210, r: 18 }, { x: 170, y: 350, r: 18 }],
     goal: { x: 330, y: 130, r: 25 } },
 
   // 58
-  { name: "Tethys", taps: 4, par: 3, seed: 1958983, ways: 28,
+  { taps: 3, seed: 1958983, ways: 28,
     start: { x: 311, y: 339 }, v0: { x: -308, y: -45 }, active: 2,
     planets: [{ x: 129, y: 182, r: 47 }, { x: 204, y: 489, r: 34 }, { x: 331, y: 200, r: 29 }],
     walls: [{ x: 87, y: 325, w: 14, h: 157 }],
@@ -382,14 +382,14 @@ const LEVELS = [
     goal: { x: 290, y: 510, r: 27 } },
 
   // 59
-  { name: "Vesta", taps: 4, par: 3, seed: 684615, ways: 29,
+  { taps: 3, seed: 684615, ways: 29,
     start: { x: 58, y: 280 }, active: 1,
     planets: [{ x: 256, y: 183, r: 23 }, { x: 140, y: 357, r: 28 }, { x: 113, y: 144, r: 30 }, { x: 236, y: 547, r: 36 }],
     gates: [{ x: 230, y: 330, r: 18 }],
     goal: { x: 350, y: 310, r: 27 } },
 
   // 60
-  { name: "Sedna", taps: 4, par: 3, seed: 595724, ways: 38,
+  { taps: 3, seed: 595724, ways: 38,
     start: { x: 360, y: 265 }, active: 0,
     planets: [{ x: 53, y: 266, r: 23 }, { x: 260, y: 173, r: 31 }, { x: 179, y: 539, r: 27 }],
     walls: [{ x: 85, y: 402, w: 177, h: 15 }],
@@ -397,7 +397,7 @@ const LEVELS = [
     goal: { x: 150, y: 470, r: 27 } },
 
   // 61
-  { name: "Eris", taps: 4, par: 3, seed: 878235, ways: 25,
+  { taps: 3, seed: 878235, ways: 25,
     start: { x: 112, y: 256 }, v0: { x: 281, y: 66 }, active: 0,
     planets: [{ x: 76, y: 411, r: 30 }, { x: 305, y: 128, r: 25 }, { x: 222, y: 271, r: 32 }, { x: 326, y: 533, r: 25 }],
     walls: [{ x: 184, y: 406, w: 180, h: 14 }, { x: 294, y: 329, w: 103, h: 14 }],
@@ -405,35 +405,35 @@ const LEVELS = [
     goal: { x: 270, y: 590, r: 24 } },
 
   // 62
-  { name: "Oberon", taps: 4, par: 3, seed: 395967, ways: 18,
+  { taps: 3, seed: 395967, ways: 18,
     start: { x: 108, y: 248 }, v0: { x: -242, y: 78 }, active: 1,
     planets: [{ x: 312, y: 199, r: 28 }, { x: 59, y: 96, r: 23 }],
     gates: [{ x: 110, y: 130, r: 18 }],
     goal: { x: 270, y: 90, r: 23 } },
 
   // 63
-  { name: "Roche", taps: 4, par: 3, seed: 621263, ways: 23,
+  { taps: 3, seed: 621263, ways: 23,
     start: { x: 86, y: 580 }, active: 2,
     planets: [{ x: 191, y: 367, r: 26 }, { x: 359, y: 459, r: 37 }, { x: 87, y: 116, r: 34 }, { x: 278, y: 159, r: 32 }],
     gates: [{ x: 110, y: 230, r: 18 }],
     goal: { x: 370, y: 590, r: 24 } },
 
   // 64
-  { name: "Rhea", taps: 4, par: 3, seed: 403886, ways: 17,
+  { taps: 3, seed: 403886, ways: 17,
     start: { x: 179, y: 371 }, active: 2,
     planets: [{ x: 292, y: 137, r: 46 }, { x: 267, y: 572, r: 36 }, { x: 118, y: 255, r: 36 }],
     gates: [{ x: 70, y: 170, r: 18 }],
     goal: { x: 150, y: 90, r: 24 } },
 
   // 65
-  { name: "Triton", taps: 4, par: 3, seed: 635319, ways: 29,
+  { taps: 3, seed: 635319, ways: 29,
     start: { x: 215, y: 169 }, v0: { x: 85, y: -311 }, active: 2,
     planets: [{ x: 297, y: 562, r: 48 }, { x: 187, y: 258, r: 32 }, { x: 363, y: 209, r: 34 }, { x: 367, y: 373, r: 26 }],
     gates: [{ x: 90, y: 250, r: 18 }, { x: 270, y: 310, r: 18 }],
     goal: { x: 150, y: 370, r: 28 } },
 
   // 66
-  { name: "Cassini", taps: 4, par: 3, seed: 587805, ways: 13,
+  { taps: 3, seed: 587805, ways: 13,
     start: { x: 141, y: 75 }, active: 2,
     planets: [{ x: 300, y: 346, r: 36 }, { x: 59, y: 270, r: 38 }, { x: 246, y: 154, r: 31 }],
     walls: [{ x: 132, y: 450, w: 17, h: 103 }],
@@ -441,7 +441,7 @@ const LEVELS = [
     goal: { x: 350, y: 190, r: 25 } },
 
   // 67
-  { name: "Europa", taps: 4, par: 3, seed: 546428, ways: 18,
+  { taps: 3, seed: 546428, ways: 18,
     start: { x: 321, y: 321 }, active: 0,
     planets: [{ x: 146, y: 176, r: 44 }, { x: 316, y: 576, r: 34 }, { x: 99, y: 506, r: 30 }],
     walls: [{ x: 283, y: 103, w: 16, h: 117 }, { x: 249, y: 447, w: 108, h: 18 }],
@@ -449,7 +449,7 @@ const LEVELS = [
     goal: { x: 50, y: 250, r: 22 } },
 
   // 68
-  { name: "Kirkwood", taps: 4, par: 3, seed: 643238, ways: 10,
+  { taps: 3, seed: 643238, ways: 10,
     start: { x: 240, y: 54 }, v0: { x: 243, y: 1 }, active: 0,
     planets: [{ x: 239, y: 265, r: 23 }, { x: 351, y: 96, r: 31 }, { x: 326, y: 401, r: 32 }],
     walls: [{ x: 82, y: 259, w: 16, h: 129 }],
@@ -457,14 +457,14 @@ const LEVELS = [
     goal: { x: 330, y: 270, r: 23 } },
 
   // 69
-  { name: "Ganymede", taps: 4, par: 3, seed: 522671, ways: 14,
+  { taps: 3, seed: 522671, ways: 14,
     start: { x: 241, y: 119 }, v0: { x: -310, y: 76 }, active: 0,
     planets: [{ x: 291, y: 326, r: 37 }, { x: 104, y: 302, r: 34 }, { x: 345, y: 491, r: 23 }],
     gates: [{ x: 150, y: 210, r: 18 }, { x: 210, y: 330, r: 18 }],
     goal: { x: 350, y: 410, r: 25 } },
 
   // 70
-  { name: "Trojan", taps: 4, par: 3, seed: 1247855, ways: 7,
+  { taps: 3, seed: 1247855, ways: 7,
     start: { x: 72, y: 285 }, active: 2,
     planets: [{ x: 335, y: 467, r: 45 }, { x: 292, y: 125, r: 22 }, { x: 82, y: 474, r: 24 }],
     walls: [{ x: 143, y: 278, w: 171, h: 17 }],
@@ -472,7 +472,7 @@ const LEVELS = [
     goal: { x: 230, y: 90, r: 28 } },
 
   // 71
-  { name: "Mizar", taps: 4, par: 2, seed: 977618, ways: 28,
+  { taps: 2, seed: 977618, ways: 28,
     start: { x: 63, y: 41 }, active: 1,
     planets: [{ x: 214, y: 448, r: 53 }, { x: 325, y: 122, r: 37 }, { x: 137, y: 199, r: 29, move: { ax: 40, ay: -26, f: 0.248, ph: 2.93 } }],
     walls: [{ x: 354, y: 243, w: 14, h: 140 }],
@@ -480,28 +480,28 @@ const LEVELS = [
     goal: { x: 230, y: 350, r: 28 } },
 
   // 72
-  { name: "Procyon", taps: 4, par: 2, seed: 1092048, ways: 14,
+  { taps: 2, seed: 1092048, ways: 14,
     start: { x: 296, y: 353 }, v0: { x: 243, y: 25 }, active: 3,
     planets: [{ x: 357, y: 470, r: 35 }, { x: 60, y: 183, r: 28 }, { x: 149, y: 438, r: 30 }, { x: 315, y: 166, r: 34, move: { ax: 36, ay: 3, f: 0.246, ph: 5.42 } }],
     gates: [{ x: 250, y: 30, r: 18 }],
     goal: { x: 190, y: 190, r: 24 } },
 
   // 73
-  { name: "Deneb", taps: 4, par: 2, seed: 706590, ways: 5,
+  { taps: 2, seed: 706590, ways: 5,
     start: { x: 379, y: 576 }, active: 0,
     planets: [{ x: 77, y: 351, r: 30 }, { x: 230, y: 430, r: 31 }, { x: 360, y: 217, r: 29, move: { ax: -20, ay: 18, f: 0.259, ph: 2.12 } }],
     gates: [{ x: 310, y: 490, r: 18 }],
     goal: { x: 310, y: 330, r: 26 } },
 
   // 74
-  { name: "Praesepe", taps: 4, par: 2, seed: 1469587, ways: 6,
+  { taps: 2, seed: 1469587, ways: 6,
     start: { x: 281, y: 151 }, v0: { x: 102, y: -281 }, active: 0,
     planets: [{ x: 142, y: 100, r: 33 }, { x: 200, y: 508, r: 34, move: { ax: -23, ay: 16, f: 0.215, ph: 0.14 } }, { x: 268, y: 334, r: 25 }],
     gates: [{ x: 190, y: 310, r: 18 }, { x: 230, y: 50, r: 18 }],
     goal: { x: 290, y: 450, r: 23 } },
 
   // 75
-  { name: "Albireo", taps: 4, par: 3, seed: 593942, ways: 51,
+  { taps: 3, seed: 593942, ways: 51,
     start: { x: 243, y: 434 }, v0: { x: -189, y: -282 }, active: 2,
     planets: [{ x: 346, y: 110, r: 33 }, { x: 194, y: 297, r: 28 }, { x: 77, y: 545, r: 27, move: { ax: -32, ay: -6, f: 0.156, ph: 5.75 } }, { x: 241, y: 576, r: 33 }],
     walls: [{ x: 96, y: 122, w: 148, h: 17 }, { x: 80, y: 259, w: 18, h: 112 }],
@@ -509,14 +509,14 @@ const LEVELS = [
     goal: { x: 210, y: 230, r: 28 } },
 
   // 76
-  { name: "Alcor", taps: 4, par: 3, seed: 665213, ways: 32,
+  { taps: 3, seed: 665213, ways: 32,
     start: { x: 40, y: 276 }, v0: { x: -17, y: 345 }, active: 2,
     planets: [{ x: 338, y: 198, r: 25, move: { ax: -21, ay: -21, f: 0.147, ph: 3.7 } }, { x: 241, y: 561, r: 34 }, { x: 214, y: 284, r: 32 }],
     gates: [{ x: 230, y: 430, r: 18 }],
     goal: { x: 110, y: 90, r: 23 } },
 
   // 77
-  { name: "Orion", taps: 4, par: 3, seed: 690752, ways: 30,
+  { taps: 3, seed: 690752, ways: 30,
     start: { x: 303, y: 45 }, v0: { x: -214, y: -193 }, active: 0,
     planets: [{ x: 198, y: 161, r: 23, move: { ax: -7, ay: 42, f: 0.2, ph: 5.71 } }, { x: 196, y: 580, r: 31 }, { x: 339, y: 290, r: 36 }],
     walls: [{ x: 115, y: 374, w: 209, h: 18 }],
@@ -524,14 +524,14 @@ const LEVELS = [
     goal: { x: 90, y: 50, r: 25 } },
 
   // 78
-  { name: "Antares", taps: 4, par: 3, seed: 712727, ways: 37,
+  { taps: 3, seed: 712727, ways: 37,
     start: { x: 375, y: 122 }, active: 0,
     planets: [{ x: 223, y: 356, r: 27 }, { x: 221, y: 121, r: 29, move: { ax: -39, ay: -13, f: 0.277, ph: 4.63 } }, { x: 166, y: 580, r: 33 }],
     gates: [{ x: 390, y: 390, r: 18 }, { x: 150, y: 310, r: 18 }],
     goal: { x: 50, y: 390, r: 22 } },
 
   // 79
-  { name: "Castor", taps: 4, par: 3, seed: 570185, ways: 18,
+  { taps: 3, seed: 570185, ways: 18,
     start: { x: 145, y: 369 }, v0: { x: -270, y: 145 }, active: 0,
     planets: [{ x: 224, y: 517, r: 33 }, { x: 313, y: 232, r: 27 }, { x: 58, y: 531, r: 22 }, { x: 107, y: 201, r: 25 }, { x: 227, y: 351, r: 28 }],
     walls: [{ x: 198, y: 98, w: 17, h: 171 }],
@@ -539,7 +539,7 @@ const LEVELS = [
     goal: { x: 70, y: 130, r: 22 } },
 
   // 80
-  { name: "Centauri", taps: 4, par: 3, seed: 617699, ways: 11,
+  { taps: 3, seed: 617699, ways: 11,
     start: { x: 292, y: 150 }, active: 1,
     planets: [{ x: 156, y: 104, r: 30 }, { x: 192, y: 540, r: 29 }, { x: 70, y: 364, r: 31 }],
     walls: [{ x: 223, y: 440, w: 123, h: 16 }],
@@ -547,14 +547,14 @@ const LEVELS = [
     goal: { x: 350, y: 390, r: 27 } },
 
   // 81
-  { name: "Hyades", taps: 4, par: 3, seed: 625618, ways: 30,
+  { taps: 3, seed: 625618, ways: 30,
     start: { x: 210, y: 512 }, active: 2,
     planets: [{ x: 307, y: 212, r: 33, move: { ax: 39, ay: -20, f: 0.236, ph: 4.56 } }, { x: 282, y: 401, r: 31, move: { ax: -18, ay: 19, f: 0.175, ph: 4.32 } }, { x: 62, y: 173, r: 22 }, { x: 96, y: 531, r: 29 }],
     gates: [{ x: 370, y: 410, r: 18 }],
     goal: { x: 370, y: 590, r: 26 } },
 
   // 82
-  { name: "Algol", taps: 4, par: 3, seed: 657294, ways: 21,
+  { taps: 3, seed: 657294, ways: 21,
     start: { x: 184, y: 566 }, v0: { x: 14, y: -292 }, active: 0,
     planets: [{ x: 361, y: 574, r: 23 }, { x: 55, y: 96, r: 23 }, { x: 280, y: 331, r: 35, move: { ax: -8, ay: 24, f: 0.239, ph: 1.74 } }, { x: 149, y: 215, r: 29 }],
     walls: [{ x: 226, y: 159, w: 181, h: 16 }],
@@ -562,7 +562,7 @@ const LEVELS = [
     goal: { x: 90, y: 270, r: 23 } },
 
   // 83
-  { name: "Capella", taps: 4, par: 3, seed: 746185, ways: 20,
+  { taps: 3, seed: 746185, ways: 20,
     start: { x: 271, y: 219 }, v0: { x: 84, y: -204 }, active: 0,
     planets: [{ x: 127, y: 160, r: 36 }, { x: 179, y: 462, r: 29 }, { x: 313, y: 101, r: 28, move: { ax: 33, ay: 23, f: 0.166, ph: 2.6 } }, { x: 217, y: 304, r: 28 }],
     walls: [{ x: 1, y: 373, w: 108, h: 16 }, { x: 317, y: 314, w: 14, h: 175 }],
@@ -570,14 +570,14 @@ const LEVELS = [
     goal: { x: 230, y: 390, r: 22 } },
 
   // 84
-  { name: "Proxima", taps: 4, par: 3, seed: 754104, ways: 18,
+  { taps: 3, seed: 754104, ways: 18,
     start: { x: 234, y: 84 }, active: 1,
     planets: [{ x: 348, y: 360, r: 25, move: { ax: -14, ay: 39, f: 0.277, ph: 6.04 } }, { x: 90, y: 99, r: 33 }, { x: 52, y: 415, r: 33 }, { x: 218, y: 469, r: 27 }],
     gates: [{ x: 410, y: 450, r: 18 }],
     goal: { x: 250, y: 270, r: 22 } },
 
   // 85
-  { name: "Pleiades", taps: 4, par: 3, seed: 787562, ways: 9,
+  { taps: 3, seed: 787562, ways: 9,
     start: { x: 93, y: 297 }, v0: { x: -63, y: -287 }, active: 0,
     planets: [{ x: 209, y: 272, r: 22 }, { x: 176, y: 527, r: 37 }, { x: 159, y: 104, r: 36 }, { x: 348, y: 287, r: 22 }],
     walls: [{ x: 235, y: 137, w: 129, h: 17 }, { x: 46, y: 357, w: 203, h: 15 }],
@@ -585,7 +585,7 @@ const LEVELS = [
     goal: { x: 330, y: 350, r: 23 } },
 
   // 86
-  { name: "Sirius", taps: 4, par: 3, seed: 562266, ways: 12,
+  { taps: 3, seed: 562266, ways: 12,
     start: { x: 212, y: 156 }, active: 0,
     planets: [{ x: 255, y: 374, r: 29 }, { x: 115, y: 543, r: 38 }, { x: 72, y: 144, r: 24, move: { ax: -9, ay: 24, f: 0.257, ph: 3.31 } }],
     walls: [{ x: 168, y: 456, w: 217, h: 16 }, { x: 134, y: 243, w: 161, h: 14 }],
@@ -593,7 +593,7 @@ const LEVELS = [
     goal: { x: 170, y: 330, r: 27 } },
 
   // 87
-  { name: "Cygnus", taps: 4, par: 3, seed: 896646, ways: 12,
+  { taps: 3, seed: 896646, ways: 12,
     start: { x: 61, y: 54 }, active: 0,
     planets: [{ x: 298, y: 185, r: 28 }, { x: 84, y: 492, r: 33 }, { x: 108, y: 311, r: 23, move: { ax: -32, ay: -14, f: 0.174, ph: 0.18 } }],
     walls: [{ x: 8, y: 156, w: 165, h: 14 }, { x: 219, y: 301, w: 14, h: 153 }],
@@ -601,7 +601,7 @@ const LEVELS = [
     goal: { x: 290, y: 250, r: 26 } },
 
   // 88
-  { name: "Oort", taps: 4, par: 3, seed: 609780, ways: 8,
+  { taps: 3, seed: 609780, ways: 8,
     start: { x: 231, y: 264 }, active: 0,
     planets: [{ x: 115, y: 276, r: 25 }, { x: 246, y: 497, r: 34 }, { x: 331, y: 241, r: 23 }, { x: 95, y: 579, r: 34 }, { x: 87, y: 98, r: 30 }],
     walls: [{ x: 68, y: 359, w: 18, h: 126 }, { x: 179, y: 342, w: 171, h: 14 }],
@@ -609,7 +609,7 @@ const LEVELS = [
     goal: { x: 170, y: 570, r: 28 } },
 
   // 89
-  { name: "Vega", taps: 4, par: 3, seed: 1003157, ways: 14,
+  { taps: 3, seed: 1003157, ways: 14,
     start: { x: 75, y: 423 }, v0: { x: 289, y: -35 }, active: 4,
     planets: [{ x: 224, y: 396, r: 34 }, { x: 324, y: 557, r: 34 }, { x: 173, y: 137, r: 33, move: { ax: -10, ay: -34, f: 0.271, ph: 4.56 } }, { x: 297, y: 247, r: 31 }, { x: 93, y: 566, r: 25 }],
     walls: [{ x: 10, y: 358, w: 122, h: 17 }, { x: 125, y: 478, w: 125, h: 16 }],
@@ -617,7 +617,7 @@ const LEVELS = [
     goal: { x: 210, y: 290, r: 28 } },
 
   // 90
-  { name: "Polaris", taps: 4, par: 3, seed: 738266, ways: 13,
+  { taps: 3, seed: 738266, ways: 13,
     start: { x: 49, y: 298 }, active: 0,
     planets: [{ x: 362, y: 541, r: 30 }, { x: 50, y: 473, r: 33 }, { x: 268, y: 248, r: 34 }, { x: 274, y: 408, r: 26, move: { ax: -16, ay: 22, f: 0.159, ph: 0.78 } }, { x: 81, y: 104, r: 35 }],
     walls: [{ x: 185, y: 132, w: 156, h: 15 }, { x: 42, y: 373, w: 100, h: 15 }],
@@ -625,7 +625,7 @@ const LEVELS = [
     goal: { x: 350, y: 350, r: 23 } },
 
   // 91
-  { name: "Heliopause", taps: 4, par: 3, seed: 1034833, ways: 11,
+  { taps: 3, seed: 1034833, ways: 11,
     start: { x: 197, y: 55 }, active: 1,
     planets: [{ x: 291, y: 199, r: 32 }, { x: 103, y: 95, r: 26 }, { x: 99, y: 384, r: 37 }, { x: 116, y: 567, r: 26 }],
     walls: [{ x: 188, y: 412, w: 17, h: 144 }],
@@ -633,14 +633,14 @@ const LEVELS = [
     goal: { x: 310, y: 390, r: 26 } },
 
   // 92
-  { name: "Pollux", taps: 4, par: 3, seed: 849132, ways: 8,
+  { taps: 3, seed: 849132, ways: 8,
     start: { x: 363, y: 500 }, active: 2,
     planets: [{ x: 145, y: 486, r: 34 }, { x: 56, y: 278, r: 31 }, { x: 298, y: 350, r: 24, move: { ax: 1, ay: -37, f: 0.253, ph: 1.88 } }],
     gates: [{ x: 210, y: 410, r: 18 }, { x: 210, y: 290, r: 18 }],
     goal: { x: 270, y: 150, r: 23 } },
 
   // 93
-  { name: "Barnard", taps: 4, par: 3, seed: 728565, ways: 7,
+  { taps: 3, seed: 728565, ways: 7,
     start: { x: 68, y: 199 }, v0: { x: -122, y: -232 }, active: 1,
     planets: [{ x: 135, y: 572, r: 29, move: { ax: 29, ay: -21, f: 0.129, ph: 1.03 } }, { x: 225, y: 116, r: 30 }, { x: 160, y: 254, r: 28 }],
     walls: [{ x: 257, y: 316, w: 17, h: 213 }, { x: 75, y: 419, w: 182, h: 16 }],
@@ -648,7 +648,7 @@ const LEVELS = [
     goal: { x: 150, y: 470, r: 25 } },
 
   // 94
-  { name: "Altair", taps: 4, par: 3, seed: 1179157, ways: 7,
+  { taps: 3, seed: 1179157, ways: 7,
     start: { x: 53, y: 400 }, v0: { x: -263, y: 104 }, active: 3,
     planets: [{ x: 265, y: 547, r: 28 }, { x: 268, y: 190, r: 30, move: { ax: 1, ay: 25, f: 0.244, ph: 0.51 } }, { x: 359, y: 342, r: 33 }, { x: 103, y: 528, r: 34 }],
     walls: [{ x: 184, y: 266, w: 15, h: 154 }, { x: 237, y: 446, w: 134, h: 18 }],
@@ -656,14 +656,14 @@ const LEVELS = [
     goal: { x: 330, y: 410, r: 26 } },
 
   // 95
-  { name: "Carina", taps: 4, par: 3, seed: 696889, ways: 5,
+  { taps: 3, seed: 696889, ways: 5,
     start: { x: 386, y: 403 }, v0: { x: 175, y: -310 }, active: 1,
     planets: [{ x: 337, y: 483, r: 27 }, { x: 210, y: 304, r: 34, move: { ax: 20, ay: 13, f: 0.278, ph: 0.06 } }, { x: 367, y: 242, r: 22 }, { x: 270, y: 121, r: 23 }],
     gates: [{ x: 350, y: 150, r: 18 }, { x: 270, y: 370, r: 18 }],
     goal: { x: 350, y: 590, r: 28 } },
 
   // 96
-  { name: "Rigel", taps: 4, par: 3, seed: 681051, ways: 13,
+  { taps: 3, seed: 681051, ways: 13,
     start: { x: 158, y: 440 }, v0: { x: 261, y: -86 }, active: 1,
     planets: [{ x: 269, y: 572, r: 28, move: { ax: 13, ay: 25, f: 0.137, ph: 3.6 } }, { x: 115, y: 308, r: 35 }, { x: 301, y: 370, r: 33 }, { x: 98, y: 547, r: 32 }, { x: 238, y: 132, r: 24, move: { ax: -6, ay: 44, f: 0.236, ph: 4.56 } }],
     walls: [{ x: 220, y: 450, w: 162, h: 14 }],
@@ -671,14 +671,14 @@ const LEVELS = [
     goal: { x: 350, y: 90, r: 28 } },
 
   // 97
-  { name: "Arcturus", taps: 4, par: 3, seed: 1194995, ways: 5,
+  { taps: 3, seed: 1194995, ways: 5,
     start: { x: 65, y: 98 }, active: 2,
     planets: [{ x: 277, y: 295, r: 29, move: { ax: -17, ay: -27, f: 0.235, ph: 2.98 } }, { x: 140, y: 191, r: 35 }, { x: 352, y: 448, r: 33 }, { x: 192, y: 522, r: 33 }, { x: 55, y: 450, r: 23 }],
     gates: [{ x: 70, y: 230, r: 18 }, { x: 90, y: 370, r: 18 }],
     goal: { x: 170, y: 430, r: 27 } },
 
   // 98
-  { name: "Aldebaran", taps: 5, par: 4, seed: 809537, ways: 46,
+  { taps: 4, seed: 809537, ways: 46,
     start: { x: 219, y: 258 }, v0: { x: 134, y: -295 }, active: 0,
     planets: [{ x: 103, y: 206, r: 37, move: { ax: -34, ay: 7, f: 0.261, ph: 3.27 } }, { x: 217, y: 530, r: 32 }, { x: 344, y: 250, r: 35 }, { x: 292, y: 102, r: 31 }],
     walls: [{ x: 28, y: 334, w: 191, h: 15 }],
@@ -686,14 +686,14 @@ const LEVELS = [
     goal: { x: 70, y: 50, r: 22 } },
 
   // 99
-  { name: "Spica", taps: 5, par: 4, seed: 857051, ways: 29,
+  { taps: 4, seed: 857051, ways: 29,
     start: { x: 169, y: 334 }, v0: { x: 266, y: 229 }, active: 1,
     planets: [{ x: 235, y: 439, r: 33, move: { ax: 15, ay: -35, f: 0.279, ph: 4.48 } }, { x: 274, y: 212, r: 22 }, { x: 107, y: 568, r: 30 }, { x: 70, y: 396, r: 33 }, { x: 123, y: 184, r: 37 }],
     gates: [{ x: 290, y: 350, r: 18 }, { x: 30, y: 90, r: 18 }],
     goal: { x: 310, y: 530, r: 24 } },
 
   // 100
-  { name: "Betelgeuse", taps: 5, par: 4, seed: 783998, ways: 14,
+  { taps: 4, seed: 783998, ways: 14,
     start: { x: 304, y: 288 }, active: 3,
     planets: [{ x: 314, y: 137, r: 46 }, { x: 65, y: 106, r: 34 }, { x: 134, y: 557, r: 31 }, { x: 282, y: 490, r: 24 }, { x: 166, y: 247, r: 33, move: { ax: 12, ay: -30, f: 0.225, ph: 3.2 } }],
     walls: [{ x: 168, y: 368, w: 168, h: 18 }, { x: 9, y: 378, w: 189, h: 17 }],

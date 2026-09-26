@@ -66,7 +66,7 @@ if (require.main === module) {
     const ex = r.min !== null ? r.example[r.min] : [];
     const tr = render(lv, i, ex);
     imgs.push(tr.img);
-    console.log(`${i + 1} ${lv.name}: min=${r.min} ${tr.status} ${tr.why} t=${tr.t.toFixed(1)}`);
+    console.log(`${i + 1}: min=${r.min} ${tr.status} ${tr.why} t=${tr.t.toFixed(1)}`);
   });
   // contact sheets: pages of 20 (4 x 5), half scale
   const cols = 4, per = 20, cw = W / 2, ch = H / 2;

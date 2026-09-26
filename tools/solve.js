@@ -1,6 +1,6 @@
-/* Brute-force solver: proves each level solvable within its tap budget and
+/* Brute-force solver: proves each level solvable within its tap limit and
    reports the minimum taps + how many distinct 0.1 s-grid tap sequences win
-   at that minimum (a robustness proxy — 1 means pixel-perfect, avoid).
+   (a robustness proxy — 1 means pixel-perfect, avoid).
    Usage: node tools/solve.js [levelIndex]  */
 const P = require("../www/physics.js");
 const LEVELS = require("../www/levels.js");
@@ -35,12 +35,12 @@ let bad = 0;
 LEVELS.forEach((lv, i) => {
   if (only !== null && i !== only) return;
   const r = solve(lv);
-  const ok = r.min !== null && r.min <= lv.par;
-  const atPar = Object.keys(r.found).filter((k) => Number(k) <= lv.par).reduce((a, k) => a + r.found[k], 0);
-  const tight = r.min !== null && lv.par > 0 && atPar < 4;
+  const ok = r.min !== null;
+  let ways = 0; for (const k in r.found) ways += r.found[k];
+  const tight = ok && lv.taps > 0 && ways < 4;
   if (!ok || tight) bad++;
   const counts = Object.keys(r.found).map((k) => `${k}:${r.found[k]}`).join(" ");
-  console.log(`${String(i + 1).padStart(2)} ${lv.name.padEnd(14)} budget=${lv.taps} par=${lv.par} min=${r.min ?? "NONE"} wins{${counts}} ex=[${(r.example[r.min] || []).map((s) => (s / 10).toFixed(1)).join(",")}] ${ok ? "" : "<-- PAR NOT MET"}${tight ? " <-- FRAGILE" : ""}`);
+  console.log(`${String(i + 1).padStart(3)} taps=${lv.taps} min=${r.min ?? "NONE"} wins{${counts}} ex=[${(r.example[r.min] || []).map((s) => (s / 10).toFixed(1)).join(",")}] ${ok ? "" : "<-- UNSOLVABLE"}${tight ? " <-- FRAGILE" : ""}`);
 });
 process.exit(bad ? 1 : 0);
 }

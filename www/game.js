@@ -11,8 +11,10 @@
   const SAVE_KEY = "orbitlock.v1";
 
   // ---- persistence -------------------------------------------------------
-  let save = { stars: {} };
+  // save.done[i] = 1 once level i is cleared (early saves kept stars; any star counts)
+  let save = { done: {} };
   try { save = Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}")); } catch (_) {}
+  if (save.stars) { for (const k in save.stars) if (save.stars[k]) save.done[k] = 1; delete save.stars; persist(); }
   function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) {} }
   // Dev mode unlocks every level. Toggle: tap the map logo 7 times quickly
   // (persists), or add ?all to the URL (this visit only).
@@ -20,7 +22,7 @@
   let devMode = false;
   try { devMode = localStorage.getItem(DEV_KEY) === "1"; } catch (_) {}
   let unlockAll = devMode || /[?&]all([=&]|$)/.test(location.search);
-  function unlocked(i) { return unlockAll || i === 0 || !!save.stars[i - 1]; }
+  function unlocked(i) { return unlockAll || i === 0 || !!save.done[i - 1]; }
 
   // ---- HiDPI ---------------------------------------------------------------
   function setupHiDPI() {
@@ -29,7 +31,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   setupHiDPI();
-  window.addEventListener("resize", setupHiDPI);
+  window.addEventListener("resize", () => { setupHiDPI(); if (current === "levels") syncMap(); });
 
   // ---- audio (tiny procedural) -------------------------------------------
   let ac = null;
@@ -94,15 +96,17 @@
     $("app").classList.toggle("on-map", name === "levels");
     if (name === "levels") buildLevelGrid();
   }
-  function starStr(n) {
-    let out = "";
-    for (let i = 0; i < 3; i++) out += '<span class="' + (i < n ? "" : "off") + '">&#9733;</span>';
-    return out;
-  }
   // ---- journey map: one winding road, level 1 at the bottom, climbing up ----
-  const J = { w: 360, step: 84, pad: 70, top: 170, amp: 92, ahead: 3, shown: 1 };
+  // Built one chapter (20 levels) at a time, and only the chapters near the
+  // viewport are in the DOM, so the road can run to thousands of levels.
+  // Each chapter is its own SVG in global map coordinates (overflow visible);
+  // chapters sit in ascending order so the next chapter's nodes cover the
+  // road segment that leads into them. The far sky is one wrapping tile.
+  const J = { w: 360, step: 84, pad: 70, top: 170, amp: 92, chap: 20, total: 1, h: 1, tile: 1400 };
+  const svgNS = "http://www.w3.org/2000/svg";
+  const map = { chunks: new Map(), frontier: 0, firstGate: -1, firstMover: -1, road: null, far: null };
   function nodePos(i) {
-    return { x: J.w / 2 + Math.sin(i * 0.62) * J.amp, y: J.top + (J.shown - 1 - i) * J.step };
+    return { x: J.w / 2 + Math.sin(i * 0.62) * J.amp, y: J.top + (J.total - 1 - i) * J.step };
   }
   function roadPath(from, to) {
     // smooth curve through the nodes from..to (inclusive), as an SVG path
@@ -115,67 +119,104 @@
     }
     return d;
   }
+  function frontierIndex() { let f = 0; while (f < LEVELS.length - 1 && save.done[f]) f++; return f; }
+  function bandTint(b) { return TINTS[b % TINTS.length]; }
+  function svgRoot(viewBox) {
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", viewBox);
+    const el = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
+    const defs = el("defs", {});
+    return { svg, el, defs };
+  }
+  const scaleOf = (host) => host.clientWidth / J.w;
+
   function buildLevelGrid() {
     const host = $("journey"); host.innerHTML = "";
-    const total = LEVELS.length;
-    let frontier = 0; while (frontier < total - 1 && save.stars[frontier]) frontier++;
-    const shown = total; J.shown = shown;
-    const h = J.top + J.pad + (shown - 1) * J.step;
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 " + J.w + " " + h);
-    svg.setAttribute("width", J.w); svg.setAttribute("height", h);
-    const el = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
+    J.total = LEVELS.length; J.h = J.top + J.pad + (J.total - 1) * J.step;
+    map.frontier = frontierIndex();
+    map.firstGate = LEVELS.findIndex((l) => l.gates && l.gates.length);
+    map.firstMover = LEVELS.findIndex((l) => l.planets.some((q) => q.move));
+    map.chunks.clear();
+    map.road = document.createElement("div"); map.road.className = "journey-road";
+    map.road.style.aspectRatio = J.w + " / " + J.h;
+    host.appendChild(map.road);
+    if (!map.far) buildFar();
+    host.onscroll = syncMap;
+    host.scrollTop = Math.max(0, nodePos(map.frontier).y * scaleOf(host) - host.clientHeight * 0.58);
+    syncMap();
+    let n = 0; for (const k in save.done) if (save.done[k]) n++;
+    $("map-count").textContent = unlockAll ? "DEV · " + n : n + " / " + J.total;
+  }
+
+  // Keep the chapters around the viewport built, drop the rest; move the sky.
+  function syncMap() {
+    const host = $("journey"), sc = scaleOf(host); if (!sc || !map.road) return;
+    const last = Math.ceil(J.total / J.chap) - 1;
+    const levelAt = (y) => Math.max(0, Math.min(J.total - 1, Math.round(J.total - 1 - (y - J.top) / J.step)));
+    const yTop = host.scrollTop / sc, yBot = (host.scrollTop + host.clientHeight) / sc;
+    const cLo = Math.max(0, Math.floor(levelAt(yBot) / J.chap) - 1), cHi = Math.min(last, Math.floor(levelAt(yTop) / J.chap) + 1);
+    for (const [c, svg] of map.chunks) if (c < cLo - 1 || c > cHi + 1) { svg.remove(); map.chunks.delete(c); }
+    for (let c = cLo; c <= cHi; c++) {
+      if (map.chunks.has(c)) continue;
+      const svg = buildChapter(c); map.chunks.set(c, svg);
+      let next = null; for (const [k, v] of map.chunks) if (k > c && (!next || k < next.k)) next = { k, v };
+      map.road.insertBefore(svg, next ? next.v : null);
+    }
+    // the far sky moves at 0.65x the road's speed, wrapping every tile
+    const o = ((yTop * 0.65) % J.tile + J.tile) % J.tile;
+    map.far.style.transform = "translateY(" + (-o * sc).toFixed(1) + "px)";
+    $("screen-levels").style.backgroundColor = bandTint(Math.floor(levelAt((yTop + yBot) / 2) / J.chap)).bg;
+  }
+
+  // The far sky: nebulae, dim stars and constellations on one tile, drawn twice.
+  function buildFar() {
+    const { svg, el, defs } = svgRoot("0 0 " + J.w + " " + J.tile * 2);
     let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const ri = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
-    const bandOf = (i) => Math.min(TINTS.length - 1, Math.floor(i / 20));
-    const bands = Math.ceil(total / 20);
-    const reached = (i) => unlockAll || i <= frontier;
-    const defs = el("defs", {});
-    let uid = 0; const gid = () => "g" + (uid++);
-    const radial = (col, stops) => { const g = el("radialGradient", { id: gid() }, defs); stops.forEach(([o, op]) => el("stop", { offset: o, "stop-color": col, "stop-opacity": op }, g)); return "url(#" + g.id + ")"; };
-
-    // ---- sky ---------------------------------------------------------------
-    const sky = el("linearGradient", { id: "sky", x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
-    for (let b = 0; b < bands; b++) {
-      const t = TINTS[Math.min(TINTS.length - 1, b)];
-      el("stop", { offset: (b / bands) * 100 + "%", "stop-color": t.bg }, sky);
-      el("stop", { offset: ((b + 1) / bands) * 100 - 2 + "%", "stop-color": t.bg }, sky);
+    const items = [];
+    for (let k = 0; k < 4; k++) {
+      const g = el("radialGradient", { id: "far" + k }, defs), col = TINTS[(k * 2 + 1) % TINTS.length].star;
+      el("stop", { offset: "0%", "stop-color": col, "stop-opacity": 0.11 }, g); el("stop", { offset: "100%", "stop-color": col, "stop-opacity": 0 }, g);
+      const cx = k % 2 ? J.w * 0.78 : J.w * 0.22, cy = (k + 0.5) * J.tile / 4;
+      items.push(["ellipse", { cx, cy, rx: 150 + ri(0, 80), ry: 260 + ri(0, 160), fill: "url(#far" + k + ")", transform: "rotate(" + ri(-30, 30) + " " + cx + " " + cy + ")" }]);
     }
-    el("rect", { x: 0, y: 0, width: J.w, height: h, fill: "url(#sky)" });
-
-    // ---- far layer (parallax: scrolls slower than the road) ----------------
-    const far = el("g", { id: "far" });
-    for (let b = 0; b < bands; b++) {   // nebulae, two per band, different sides
-      const t = TINTS[Math.min(TINTS.length - 1, b)];
-      for (let k = 0; k < 2; k++) {
-        const cx = k ? J.w * 0.78 : J.w * 0.22, cy = nodePos(Math.min(total - 1, b * 20 + 4 + k * 11)).y;
-        el("ellipse", { cx, cy, rx: 150 + ri(0, 80), ry: 260 + ri(0, 160), fill: radial(t.star, [["0%", 0.11], ["100%", 0]]), transform: "rotate(" + ri(-30, 30) + " " + cx + " " + cy + ")" }, far);
-      }
-    }
-    for (let i = 0; i < total * 4; i++) {   // far stars, tiny
-      const cy = rnd() * h;
-      el("circle", { cx: rnd() * J.w, cy, r: 0.4 + rnd() * 0.8, fill: TINTS[Math.min(TINTS.length - 1, Math.floor((h - cy) / (J.step * 20)))].star, opacity: 0.12 + rnd() * 0.3 }, far);
-    }
-    // constellations: a few stars joined by faint lines, one per ~15 levels
-    for (let c = 0; c * 15 + 7 < total; c++) {
-      const anchor = nodePos(c * 15 + 7), side = anchor.x > J.w / 2 ? -1 : 1;
-      const cx = J.w / 2 + side * (J.w * 0.28 + ri(-20, 20)), cy = anchor.y + ri(-30, 30);
+    for (let i = 0; i < 170; i++) items.push(["circle", { cx: rnd() * J.w, cy: rnd() * J.tile, r: 0.4 + rnd() * 0.8, fill: TINTS[i % TINTS.length].star, opacity: 0.12 + rnd() * 0.3 }]);
+    for (let c = 0; c < 4; c++) {   // constellations: a few stars joined by faint lines
+      const cx = J.w / 2 + (c % 2 ? -1 : 1) * (J.w * 0.28 + ri(-20, 20)), cy = (c + 0.5) * J.tile / 4 + ri(-40, 40);
       const pts = []; const n = ri(4, 6);
       for (let k = 0; k < n; k++) pts.push({ x: cx + ri(-46, 46), y: cy + ri(-60, 60) });
-      const path = pts.map((p, k) => (k ? "L" : "M") + p.x + " " + p.y).join(" ");
-      el("path", { d: path, fill: "none", stroke: "#eef0ff", "stroke-width": 0.8, opacity: 0.16 }, far);
-      pts.forEach((p) => el("circle", { cx: p.x, cy: p.y, r: 1.4 + rnd(), fill: "#eef0ff", opacity: 0.6 }, far));
+      items.push(["path", { d: pts.map((p, k) => (k ? "L" : "M") + p.x + " " + p.y).join(" "), fill: "none", stroke: "#eef0ff", "stroke-width": 0.8, opacity: 0.16 }]);
+      pts.forEach((p) => items.push(["circle", { cx: p.x, cy: p.y, r: 1.4 + rnd(), fill: "#eef0ff", opacity: 0.6 }]));
     }
+    for (let copy = 0; copy < 2; copy++) {
+      const g = el("g", { transform: "translate(0 " + copy * J.tile + ")" });
+      for (const [tag, attrs] of items) el(tag, attrs, g);
+    }
+    $("journey-far").appendChild(svg); map.far = svg;
+  }
 
-    // ---- near stars: some twinkle -------------------------------------------
-    for (let i = 0; i < total * 2; i++) {
-      const cy = rnd() * h, st = el("circle", { cx: rnd() * J.w, cy, r: 0.6 + rnd() * 1.2, fill: TINTS[Math.min(TINTS.length - 1, Math.floor((h - cy) / (J.step * 20)))].star, opacity: 0.25 + rnd() * 0.5 });
-      if (i % 5 === 0) el("animate", { attributeName: "opacity", values: "0.2;0.9;0.2", dur: (2 + rnd() * 4).toFixed(1) + "s", begin: (rnd() * 4).toFixed(1) + "s", repeatCount: "indefinite" }, st);
+  // One chapter: scenery, landmark, road and nodes for levels lo..hi.
+  function buildChapter(c) {
+    const total = J.total, lo = c * J.chap, hi = Math.min(total - 1, lo + J.chap - 1), lastChap = hi === total - 1;
+    const y0 = lastChap ? 0 : nodePos(hi).y - J.step / 2, y1 = c === 0 ? J.h : nodePos(lo).y + J.step / 2;
+    const { svg, el, defs } = svgRoot("0 " + y0 + " " + J.w + " " + (y1 - y0));
+    svg.setAttribute("overflow", "visible");
+    svg.style.top = (y0 / J.h * 100) + "%"; svg.style.height = ((y1 - y0) / J.h * 100) + "%";
+    const frontier = map.frontier;
+    let seed = 99 + c * 7919; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const ri = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
+    const reached = (i) => unlockAll || i <= frontier;
+    let uid = 0; const gid = () => "c" + c + "g" + (uid++);
+    const radial = (col, stops) => { const g = el("radialGradient", { id: gid() }, defs); stops.forEach(([o, op]) => el("stop", { offset: o, "stop-color": col, "stop-opacity": op }, g)); return "url(#" + g.id + ")"; };
+    const tint = bandTint(c);
+
+    // ---- near stars: some twinkle; a shooting star on a long loop -------------
+    for (let k = 0; k < J.chap * 2; k++) {
+      const st = el("circle", { cx: rnd() * J.w, cy: y0 + rnd() * (y1 - y0), r: 0.6 + rnd() * 1.2, fill: tint.star, opacity: 0.25 + rnd() * 0.5 });
+      if (k % 5 === 0) el("animate", { attributeName: "opacity", values: "0.2;0.9;0.2", dur: (2 + rnd() * 4).toFixed(1) + "s", begin: (rnd() * 4).toFixed(1) + "s", repeatCount: "indefinite" }, st);
     }
-    // shooting stars: a handful, each streaks across on a long loop
-    for (let k = 0; k < Math.max(3, Math.floor(total / 15)); k++) {
-      const y = rnd() * (h - 200) + 100, len = 70;
+    {
+      const y = y0 + 100 + rnd() * Math.max(0, y1 - y0 - 200), len = 70;
       const g = el("g", { opacity: 0 });
       el("line", { x1: 0, y1: 0, x2: -len, y2: len * 0.35, stroke: "#eef0ff", "stroke-width": 1.5, "stroke-linecap": "round", opacity: 0.8 }, g);
       el("circle", { r: 1.8, fill: "#fff" }, g);
@@ -199,16 +240,17 @@
       }
     };
     const KINDS = ["plain", "ringed", "cratered", "banded", "moon", "plain"];
-    LEVELS.forEach((lv, i) => {
-      if (i % 2 !== 1) return;
-      const p = nodePos(i), side = p.x > J.w / 2 ? 1 : -1;
+    for (let i = lo; i <= hi; i++) {
+      if (i % 2 !== 1) continue;
+      const lv = LEVELS[i], p = nodePos(i), side = p.x > J.w / 2 ? 1 : -1;
       const col = COLS[(i * 7 + lv.planets.length) % 4];
       const r = 5 + (lv.planets[0].r / 54) * 8;
       const x = Math.max(16, Math.min(J.w - 16, p.x + side * (44 + ri(0, 40)))), y = p.y + 28 + ri(0, 30);
       planet(x, y, r, col, reached(i), KINDS[(i >> 1) % KINDS.length]);
-    });
+    }
     // asteroid belts: a scatter of grey rocks crossing the road on a slant
-    for (let b = 12; b < total - 5; b += 25) {
+    for (let b = lo; b <= hi; b++) {
+      if ((b - 12) % 25 !== 0 || b >= total - 5) continue;
       const p = nodePos(b), on = reached(b);
       const g = el("g", { opacity: on ? 0.7 : 0.3 });
       for (let k = 0; k < 34; k++) {
@@ -218,17 +260,9 @@
         el("circle", { cx: x, cy: y, r: 1 + rnd() * 2.4, fill: "#8a8fb5", opacity: 0.35 + rnd() * 0.5 }, g);
       }
     }
-    // a satellite, and a wormhole pair, as one-off set pieces
-    if (total > 50) {
-      const p = nodePos(48), side = p.x > J.w / 2 ? -1 : 1, x = Math.max(60, Math.min(J.w - 60, p.x + side * 120)), y = p.y + 10, on = reached(48);
-      const g = el("g", { opacity: on ? 0.85 : 0.3, transform: "rotate(-25 " + x + " " + y + ")" });
-      el("rect", { x: x - 26, y: y - 5, width: 16, height: 10, fill: COLS[1], opacity: 0.8 }, g);
-      el("rect", { x: x + 10, y: y - 5, width: 16, height: 10, fill: COLS[1], opacity: 0.8 }, g);
-      el("line", { x1: x - 10, y1: y, x2: x + 10, y2: y, stroke: "#8a8fb5", "stroke-width": 1.5 }, g);
-      el("circle", { cx: x, cy: y, r: 4.5, fill: "#eef0ff" }, g);
-    }
-    if (total > 32) {
-      const a = nodePos(31), b = nodePos(34), on = reached(31);
+    // set pieces that come round every five chapters: a wormhole pair, a satellite
+    if (c % 5 === 1 && lo + 14 < total) {
+      const a = nodePos(lo + 11), b = nodePos(lo + 14), on = reached(lo + 11);
       const ax = Math.max(40, Math.min(J.w - 40, a.x + (a.x > J.w / 2 ? -1 : 1) * 105)), bx = Math.max(40, Math.min(J.w - 40, b.x + (b.x > J.w / 2 ? -1 : 1) * 105));
       const g = el("g", { opacity: on ? 0.9 : 0.3 });
       el("line", { x1: ax, y1: a.y, x2: bx, y2: b.y, stroke: COLS[2], "stroke-width": 1.2, "stroke-dasharray": "4 7", opacity: 0.4 }, g);
@@ -238,8 +272,16 @@
         el("animateTransform", { attributeName: "transform", type: "rotate", from: "0 " + x + " " + y, to: "360 " + x + " " + y, dur: "3s", repeatCount: "indefinite" }, sw);
       });
     }
+    if (c % 5 === 2 && lo + 8 < total) {
+      const p = nodePos(lo + 8), side = p.x > J.w / 2 ? -1 : 1, x = Math.max(60, Math.min(J.w - 60, p.x + side * 120)), y = p.y + 10, on = reached(lo + 8);
+      const g = el("g", { opacity: on ? 0.85 : 0.3, transform: "rotate(-25 " + x + " " + y + ")" });
+      el("rect", { x: x - 26, y: y - 5, width: 16, height: 10, fill: COLS[1], opacity: 0.8 }, g);
+      el("rect", { x: x + 10, y: y - 5, width: 16, height: 10, fill: COLS[1], opacity: 0.8 }, g);
+      el("line", { x1: x - 10, y1: y, x2: x + 10, y2: y, stroke: "#8a8fb5", "stroke-width": 1.5 }, g);
+      el("circle", { cx: x, cy: y, r: 4.5, fill: "#eef0ff" }, g);
+    }
 
-    // ---- landmarks at each 20-level boundary ----------------------------------
+    // ---- landmark on the chapter's last level; a summit where the road ends ----
     const LANDMARKS = [
       function ringedGiant(x, y, on) {
         el("ellipse", { cx: x, cy: y, rx: 62, ry: 16, fill: "none", stroke: COLS[2], "stroke-width": 2, opacity: on ? 0.5 : 0.2, transform: "rotate(-22 " + x + " " + y + ")" });
@@ -272,37 +314,37 @@
         el("circle", { cx: x, cy: y, r: 9, fill: COLS[1], opacity: on ? 1 : 0.35 });
       },
     ];
-    for (let b = 1; b * 20 <= total; b++) {
-      const idx = Math.min(total - 1, b * 20 - 1);
-      const p = nodePos(idx), on = !!save.stars[idx] || unlockAll;
-      const draw = LANDMARKS[Math.min(LANDMARKS.length - 1, b - 1)];
-      if (b * 20 === total) draw(J.w / 2, p.y - 80, on);
-      else { const side = p.x > J.w / 2 ? -1 : 1; draw(Math.max(70, Math.min(J.w - 70, p.x + side * 120)), p.y - 42, on); }
-    }
-    if (total % 20 !== 0) LANDMARKS[4](J.w / 2, nodePos(total - 1).y - 80, !!save.stars[total - 1] || unlockAll);
+    const cleared = (i) => !!save.done[i] || unlockAll;
+    if (hi === lo + J.chap - 1) {
+      const p = nodePos(hi), draw = LANDMARKS[c % LANDMARKS.length];
+      if (lastChap) draw(J.w / 2, p.y - 80, cleared(hi));
+      else { const side = p.x > J.w / 2 ? -1 : 1; draw(Math.max(70, Math.min(J.w - 70, p.x + side * 120)), p.y - 42, cleared(hi)); }
+    } else LANDMARKS[4](J.w / 2, nodePos(hi).y - 80, cleared(hi));
 
     // ---- road: faint ahead, lit and flowing behind you ---------------------------
-    el("path", { d: roadPath(0, shown - 1), fill: "none", stroke: "#2a2f5a", "stroke-width": 3, "stroke-linecap": "round" });
-    if (frontier > 0) {
-      const lg = el("linearGradient", { id: "lit", gradientUnits: "userSpaceOnUse", x1: 0, y1: nodePos(0).y, x2: 0, y2: nodePos(frontier).y }, defs);
+    // this chapter owns the segment up into the next chapter's first node
+    const top = Math.min(total - 1, hi + 1);
+    el("path", { d: roadPath(lo, top), fill: "none", stroke: "#2a2f5a", "stroke-width": 3, "stroke-linecap": "round" });
+    if (lo < frontier) {
+      const litTo = Math.min(top, frontier);
+      const lg = el("linearGradient", { id: gid(), gradientUnits: "userSpaceOnUse", x1: 0, y1: nodePos(0).y, x2: 0, y2: nodePos(frontier).y }, defs);
       el("stop", { offset: "0%", "stop-color": COLS[0] }, lg);
       el("stop", { offset: "100%", "stop-color": COLS[1] }, lg);
-      el("path", { d: roadPath(0, frontier), fill: "none", stroke: "url(#lit)", "stroke-width": 3, "stroke-linecap": "round", opacity: 0.85 });
-      const flow = el("path", { d: roadPath(0, frontier), fill: "none", stroke: "#fff", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-dasharray": "2 14", opacity: 0.55 });
+      el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "url(#" + lg.id + ")", "stroke-width": 3, "stroke-linecap": "round", opacity: 0.85 });
+      const flow = el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "#fff", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-dasharray": "2 14", opacity: 0.55 });
       el("animate", { attributeName: "stroke-dashoffset", from: 64, to: 0, dur: "2.4s", repeatCount: "indefinite" }, flow);
     }
 
     // ---- nodes -----------------------------------------------------------------
-    LEVELS.forEach((lv, i) => {
-      const p = nodePos(i), st = save.stars[i] || 0, open = unlocked(i), isCur = i === frontier;
+    for (let i = lo; i <= hi; i++) {
+      const p = nodePos(i), done = !!save.done[i], open = unlocked(i), isCur = i === frontier;
       const g = el("g", { class: "node" + (open ? "" : " locked"), transform: "translate(" + p.x + " " + p.y + ")" });
-      const hasNew = (lv.gates && lv.gates.length && !LEVELS.slice(0, i).some((l) => l.gates && l.gates.length)) ||
-                     (lv.planets.some((q) => q.move) && !LEVELS.slice(0, i).some((l) => l.planets.some((q) => q.move)));
-      el("circle", { r: 20, fill: TINTS[bandOf(i)].bg }, g);
-      if (st) {
+      const hasNew = i === map.firstGate || i === map.firstMover;
+      const big = i + 1 >= 1000;   // four-digit numbers need a smaller font
+      el("circle", { r: 20, fill: tint.bg }, g);
+      if (done) {
         el("circle", { r: 16, fill: COLS[1], opacity: 0.18 }, g);
         el("circle", { r: 16, fill: "none", stroke: COLS[1], "stroke-width": 2 }, g);
-        if (st === 3) el("circle", { r: 19.5, fill: "none", stroke: GOLD, "stroke-width": 1, opacity: 0.7 }, g);
       } else if (isCur) {
         el("circle", { r: 16, fill: GOLD, opacity: 0.15 }, g);
         el("circle", { r: 16, fill: "none", stroke: GOLD, "stroke-width": 2.5 }, g);
@@ -317,34 +359,23 @@
         el("text", { y: 38, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 2, opacity: 0.8 }, g).textContent = "TAP TO PLAY";
       } else {
         el("circle", { r: open ? 14 : 10, fill: "#0b0e22", stroke: "#2a2f5a", "stroke-width": 1.5 }, g);
-        if (!open) el("text", { y: 3.5, "text-anchor": "middle", "font-size": 9, fill: "#3a4080" }, g).textContent = i + 1;
+        if (!open) el("text", { y: big ? 2.5 : 3.5, "text-anchor": "middle", "font-size": big ? 6.5 : 9, fill: "#3a4080" }, g).textContent = i + 1;
       }
       if (open) {
-        el("text", { y: 5, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: st ? "#eef0ff" : isCur ? GOLD : "#7d82ad" }, g).textContent = i + 1;
-        if (st) el("text", { y: 34, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "\u2605".repeat(st) + "\u2606".repeat(3 - st);
+        el("text", { y: big ? 4 : 5, "text-anchor": "middle", "font-size": big ? 10.5 : 13, "font-weight": 700, fill: done ? "#eef0ff" : isCur ? GOLD : "#7d82ad" }, g).textContent = i + 1;
         const side = p.x > J.w / 2 ? -1 : 1;
-        if (hasNew && !st) el("text", { x: side * 30, y: 4, "text-anchor": side < 0 ? "end" : "start", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "SOMETHING NEW";
+        if (hasNew && !done) el("text", { x: side * 30, y: 4, "text-anchor": side < 0 ? "end" : "start", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "SOMETHING NEW";
         g.addEventListener("click", () => { loadLevel(i); showScreen(null); });
       }
-    });
-    host.appendChild(svg);
-
-    // parallax: the far layer follows the scroll at a fraction of the speed
-    const scale = () => host.clientWidth / J.w;
-    const onScroll = () => { far.setAttribute("transform", "translate(0 " + (host.scrollTop / scale() * 0.35).toFixed(1) + ")"); };
-    host.onscroll = onScroll;
-    host.scrollTop = Math.max(0, nodePos(frontier).y * scale() - host.clientHeight * 0.58);
-    onScroll();
-    let stars = 0; for (const k in save.stars) stars += save.stars[k];
-    $("map-stars").textContent = stars + " \u2605";
+    }
+    return svg;
   }
   function renderPips() {
     pipsEl.innerHTML = "";
-    // gold pips = the level's answer (par); spare pips after them each cost a star.
-    // Taps use gold first, then spares, left to right.
+    // one pip per tap; the level needs every one of them
     for (let i = 0; i < level.taps; i++) {
       const d = document.createElement("span");
-      d.className = "pip " + (i < level.par ? "gold" : "spare") + (i < s.taps ? " spent" : "") + (i === level.par ? " first-spare" : "");
+      d.className = "pip" + (i < s.taps ? " spent" : "");
       pipsEl.appendChild(d);
     }
   }
@@ -358,7 +389,7 @@
   }
   function setFooter() {
     if (s.status === "idle") footer.textContent = level.hint || firstHint() || "Tap to launch";
-    else if (s.status === "live") footer.textContent = s.taps >= level.taps ? "No taps left" : s.taps >= level.par && level.par < level.taps ? "Spare taps cost a star" : "Tap to switch pull";
+    else if (s.status === "live") footer.textContent = s.taps < level.taps ? "Tap to switch pull" : "No taps left";
     else footer.textContent = "";
   }
 
@@ -386,11 +417,8 @@
   }
 
   function onWin() {
-    const spares = Math.max(0, s.taps - level.par);
-    const n = Math.max(1, 3 - spares);
-    if ((save.stars[levelIndex] || 0) < n) { save.stars[levelIndex] = n; persist(); }
-    $("win-stars").innerHTML = starStr(n);
-    $("win-text").textContent = spares ? spares + " spare tap" + (spares === 1 ? "" : "s") + " used" : "Perfect — no spares";
+    if (!save.done[levelIndex]) { save.done[levelIndex] = 1; persist(); }
+    $("win-text").textContent = "Level " + (levelIndex + 1) + " cleared";
     const nextBtn = screens.win.querySelector("[data-action=next]");
     nextBtn.disabled = levelIndex + 1 >= LEVELS.length;
     showScreen("win");
@@ -439,7 +467,7 @@
       ctx.globalAlpha = mono ? 1 : alpha; ctx.stroke(); ctx.globalAlpha = 1;
     }
   }
-  // The sky drifts very slightly every 20 levels: same game, further out.
+  // The sky drifts very slightly every 20 levels (cycling): same game, further out.
   const TINTS = [
     { bg: "#05060f", star: "#c9d1ff" },
     { bg: "#06070f", star: "#c4d6ff" },
@@ -448,7 +476,7 @@
     { bg: "#080610", star: "#e0c9f5" },
     { bg: "#050810", star: "#c9f0e6" },
   ];
-  function tint() { return TINTS[Math.min(TINTS.length - 1, Math.floor(levelIndex / 20))]; }
+  function tint() { return TINTS[Math.floor(levelIndex / 20) % TINTS.length]; }
   function render() {
     const tn = tint();
     ctx.fillStyle = tn.bg; ctx.fillRect(0, 0, W, H);
@@ -572,7 +600,7 @@
   });
   document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", () => {
     const a = b.dataset.action;
-    if (a === "play") { let i = 0; while (i < LEVELS.length - 1 && save.stars[i]) i++; loadLevel(i); showScreen(null); }
+    if (a === "play") { loadLevel(frontierIndex()); showScreen(null); }
     else if (a === "levels") showScreen("levels");
     else if (a === "howto") showScreen("howto");
     else if (a === "back") showScreen(returnTo);

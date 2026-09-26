@@ -68,9 +68,7 @@ html, body {
   background: transparent;
   transition: background 0.15s, transform 0.15s;
 }
-.pip.gold { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
-.pip.spare { border-color: var(--muted); background: var(--muted); }
-.pip.first-spare { margin-left: 5px; }
+.pip { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
 .pip.spent { background: transparent; box-shadow: none; transform: scale(0.7); opacity: 0.45; }
 
 .board-wrap {
@@ -127,16 +125,16 @@ canvas { display: block; width: 100%; height: 100%; }
 .btn:active { transform: scale(0.97); }
 .btn[disabled] { opacity: 0.35; }
 
-#screen-levels { justify-content: flex-start; padding: 0; gap: 0; background: var(--bg); backdrop-filter: none; }
+#screen-levels { justify-content: flex-start; padding: 0; gap: 0; background: var(--bg); backdrop-filter: none; transition: background-color 0.8s; }
 .map-head {
   width: 100%;
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px 8px;
 }
-.logo.small { font-size: 22px !important; letter-spacing: 6px !important; line-height: 1; }
-.map-stars { color: var(--gold); font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+.logo.small { font-size: 22px !important; letter-spacing: 6px !important; line-height: 1; white-space: nowrap; }
+.map-count { color: var(--gold); font-size: 14px; font-weight: 700; letter-spacing: 1px; white-space: nowrap; }
 .map-head { position: relative; z-index: 2; background: linear-gradient(to bottom, var(--bg) 60%, transparent); padding-bottom: 14px; }
-.map-head .map-stars { margin-left: auto; margin-right: 12px; }
+.map-head .map-count { margin-left: auto; margin-right: 12px; }
 .icon-btn.slim { width: 30px; height: 30px; font-size: 14px; border-radius: 10px; color: var(--muted); }
 #app.on-map .hud, #app.on-map .footer-hint { visibility: hidden; }
 .journey {
@@ -150,12 +148,14 @@ canvas { display: block; width: 100%; height: 100%; }
   margin-top: -14px;
 }
 .journey::-webkit-scrollbar { display: none; }
-.journey svg { display: block; width: 100%; height: auto; }
+.journey { position: relative; z-index: 1; }
+.journey-road { position: relative; width: 100%; }
+.journey-road svg { position: absolute; left: 0; width: 100%; display: block; }
+.journey-far { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.journey-far svg { display: block; width: 100%; height: auto; will-change: transform; }
 .journey .node { cursor: pointer; }
 .journey .node.locked { cursor: default; }
 .journey text { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; user-select: none; pointer-events: none; }
 
-.stars { font-size: 34px; letter-spacing: 6px; color: var(--gold); }
-.stars .off { color: #2a2f5a; }
 
 .footer-hint { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; min-height: 16px; }

@@ -38,5 +38,5 @@ for (const k of (wantK !== null ? [wantK] : [1, 2, 3])) {
     if (fewer === 0 && n >= 3 && frac < 0.35) out.push({ x: cx * CELL + 10, y: cy * CELL + 10, n, frac });
   }
   out.sort((a, b) => b.n - a.n);
-  console.log(`${lv.name} k=${k}: ` + out.slice(0, 14).map((o) => `(${o.x},${o.y})x${o.n}`).join(" "));
+  console.log(`level ${i + 1} k=${k}: ` + out.slice(0, 14).map((o) => `(${o.x},${o.y})x${o.n}`).join(" "));
 }

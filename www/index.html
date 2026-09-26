@@ -34,7 +34,7 @@
           <li><b>Tap</b> again to switch the pull to the <b>next planet</b> (the one with the dashed ring).</li>
           <li>Reach the <b>gold ring</b>.</li>
           <li>Planets, walls and the edge of space are all fatal.</li>
-          <li>Your taps are the pips up top. Finish on the <b>gold</b> ones for 3 stars; each <b>grey spare</b> you use costs a star.</li>
+          <li>Your taps are the <b>pips</b> up top. When they're gone, they're gone.</li>
           <li>Your last attempt is drawn as a ghost trail.</li>
         </ul>
         <button class="btn" data-action="back">Back</button>
@@ -42,9 +42,10 @@
 
       <!-- Home: the journey map -->
       <section id="screen-levels" class="screen">
+        <div id="journey-far" class="journey-far" aria-hidden="true"></div>
         <header class="map-head">
           <h2 class="logo small">ORBIT LOCK</h2>
-          <span id="map-stars" class="map-stars"></span>
+          <span id="map-count" class="map-count"></span>
           <button class="icon-btn slim" data-action="howto" aria-label="How to play" title="How to play">?</button>
         </header>
         <div id="journey" class="journey"></div>
@@ -53,7 +54,6 @@
       <!-- Win -->
       <section id="screen-win" class="screen hidden">
         <h2>Orbit Locked</h2>
-        <div id="win-stars" class="stars"></div>
         <p id="win-text" class="tagline"></p>
         <button class="btn" data-action="next">Next</button>
         <button class="btn ghost" data-action="retry">Retry</button>
