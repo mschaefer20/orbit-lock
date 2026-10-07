@@ -1,8 +1,14 @@
 /* Renders each level + the solver's min-tap trajectory to tools/out/NN.png
-   (pure Node, no deps). Usage: node tools/render.js [levelIndex] */
+   (pure Node, no deps), plus contact sheets of 20 (one per chapter):
+   tools/out/sheet-101-120.png. The grey line is the no-tap path.
+   Usage: node tools/render.js [from] [to] [--file levels.js|candidates.json]
+   (from/to are 1-based level numbers; default: every level) */
 const fs = require("fs"), zlib = require("zlib"), path = require("path");
 const P = require("../www/physics.js");
-const LEVELS = require("../www/levels.js");
+const argv = process.argv.slice(2), fi = argv.indexOf("--file");
+const FILE = fi >= 0 ? path.resolve(argv.splice(fi, 2)[1]) : path.join(__dirname, "..", "www", "levels.js");
+const LEVELS = FILE.endsWith(".json") ? JSON.parse(fs.readFileSync(FILE, "utf8")) : require(FILE);
+const TAG = FILE.endsWith(".json") ? path.basename(FILE, ".json") + "-" : "";   // candidates: 120-1.png ...
 const W = P.W, H = P.H;
 
 function png(w, h, rgb) {
@@ -51,35 +57,38 @@ function render(level, i, tapSlots) {
   for (const t of tr.tapPts) im.circle(t.x, t.y, 5, [255, 255, 255], true);
   im.circle(level.start.x, level.start.y, P.ORB_R, [255, 255, 255], false);
   fs.mkdirSync(path.join(__dirname, "out"), { recursive: true });
-  fs.writeFileSync(path.join(__dirname, "out", String(i + 1).padStart(2, "0") + ".png"), png(W, H, im.b));
+  fs.writeFileSync(path.join(__dirname, "out", TAG + String(i + 1).padStart(2, "0") + ".png"), png(W, H, im.b));
   tr.img = im;
   return tr;
 }
 module.exports = { render, trajectory };
 if (require.main === module) {
   const { solve } = require("./solve.js");
-  const only = process.argv[2] !== undefined ? Number(process.argv[2]) : null;
+  const from = argv[0] !== undefined ? Number(argv[0]) : 1, to = argv[1] !== undefined ? Number(argv[1]) : argv[0] !== undefined ? from : LEVELS.length;
   const imgs = [];
   LEVELS.forEach((lv, i) => {
-    if (only !== null && i !== only) return;
+    if (i + 1 < from || i + 1 > to) return;
     const r = solve(lv);
     const ex = r.min !== null ? r.example[r.min] : [];
     const tr = render(lv, i, ex);
-    imgs.push(tr.img);
+    imgs.push({ img: tr.img, n: i + 1 });
     console.log(`${i + 1}: min=${r.min} ${tr.status} ${tr.why} t=${tr.t.toFixed(1)}`);
   });
-  // contact sheets: pages of 20 (4 x 5), half scale
-  const cols = 4, per = 20, cw = W / 2, ch = H / 2;
-  for (let pg = 0; pg * per < imgs.length; pg++) {
-    const page = imgs.slice(pg * per, pg * per + per), rows = Math.ceil(page.length / cols);
+  // contact sheets: one per chapter (20 levels, 4 x 5), half scale, in level order
+  const cols = 4, cw = W / 2, ch = H / 2, pages = {};
+  for (const it of imgs) { const key = TAG ? "all" : Math.ceil(it.n / 20); (pages[key] = pages[key] || []).push(it); }
+  for (const key in pages) {
+    const page = pages[key], rows = Math.ceil(page.length / cols);
     const sheet = Buffer.alloc(cols * cw * rows * ch * 3);
-    page.forEach((im, k) => {
+    page.forEach(({ img: im }, k) => {
       const ox = (k % cols) * cw, oy = Math.floor(k / cols) * ch;
       for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
         const si = ((y * 2) * W + x * 2) * 3, di = ((oy + y) * cols * cw + ox + x) * 3;
         for (let c = 0; c < 3; c++) sheet[di + c] = Math.max(im.b[si + c], im.b[si + 3 + c], im.b[si + W * 3 + c], im.b[si + W * 3 + 3 + c]);
       }
     });
-    fs.writeFileSync(path.join(__dirname, "out", `sheet-${pg + 1}.png`), png(cols * cw, rows * ch, sheet));
+    const name = TAG ? `sheet-${TAG}candidates.png` : `sheet-${key * 20 - 19}-${key * 20}.png`;
+    fs.writeFileSync(path.join(__dirname, "out", name), png(cols * cw, rows * ch, sheet));
+    console.log("sheet: tools/out/" + name);
   }
 }

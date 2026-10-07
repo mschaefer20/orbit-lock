@@ -1,28 +1,45 @@
 /* Orbit Lock level generator.
 
-   Builds levels.js = hand-made openers (tools/handmade.js) + generated levels
-   up to COUNT. Generation is seeded per slot, so re-running reproduces the
-   same file; raising COUNT appends new blocks without touching earlier ones.
+   Builds levels.js = hand-made levels (tools/handmade.js) + generated levels
+   up to COUNT. What goes in each slot comes from tools/chapters.js (20-level
+   chapters, a difficulty wave inside each). Generation is seeded per slot,
+   so re-running reproduces the same file; raising --count appends chapters
+   without touching earlier slots.
 
-   Per slot: sample a layout from the block's profile -> rasterize every
-   k-tap trajectory onto a grid -> pick a goal cell that is reached by a
-   healthy number of exactly-k sequences and by none with fewer taps ->
-   (optionally) drop a checkpoint gate on the winning paths -> confirm with
-   the exact solver and the difficulty window -> keep, else retry.
+   Per slot: sample a layout from the profile -> rasterize every k-tap
+   trajectory onto a grid -> pick a goal cell that is reached by a healthy
+   number of exactly-k sequences and by none with fewer taps -> (optionally)
+   drop checkpoint gates on the winning paths -> prove with the exact solver
+   and pass the quality gates (tools/quality.js) -> keep, else retry.
    taps = k is a hard limit: the level needs every tap it gives you.
+   Finale slots generate several passing candidates and keep the most
+   interesting; all of them are saved so you can pick another by eye.
+   Near-duplicates of any earlier level are rerolled.
 
-   Usage: node tools/gen.js [--count 100] [--from 17] [--to 100] [--dry]
-   --from/--to regenerate only those slots (others are read from levels.js). */
-const fs = require("fs"), path = require("path");
+   Usage: node tools/gen.js [options]
+     --count N        levels in the file (default: current length, min 100)
+     --from A --to B  regenerate these slots even if they exist (with a
+                      new seed). Without them, existing slots are kept and
+                      only missing ones (up to --count) are generated.
+     --jobs N         worker threads (default: cores - 2, max 16)
+     --out FILE       write here instead of www/levels.js
+     --force          generate slots whose mechanics aren't built yet,
+                      using only the ready ones (for pipeline testing)
+     --pick S:I       put candidate I (1-based) of finale slot S into the file
+     --dry            don't write */
+const fs = require("fs"), path = require("path"), os = require("os");
+const { Worker, isMainThread, parentPort } = require("worker_threads");
 const P = require("../www/physics.js");
-const HANDMADE = require("./handmade.js");
+const { openers: OPENERS, at: HANDMADE_AT } = require("./handmade.js");
 const { solve } = require("./solve.js");
+const { profile, INGREDIENTS } = require("./chapters.js");
+const Q = require("./quality.js");
 
 const args = process.argv.slice(2);
-const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? Number(args[i + 1]) : d; };
-const COUNT = opt("--count", 100), FROM = opt("--from", HANDMADE.length + 1), TO = opt("--to", COUNT);
-const DRY = args.includes("--dry");
-const OUT = path.join(__dirname, "..", "www", "levels.js");
+const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
+const DEFAULT_OUT = path.join(__dirname, "..", "www", "levels.js");
+const OUT = path.resolve(opt("--out", DEFAULT_OUT));
+const CAND_DIR = path.join(__dirname, "out", "candidates");
 
 // ---- seeded rng ------------------------------------------------------------
 function rng(seed) {
@@ -33,21 +50,8 @@ function rng(seed) {
   r.chance = (p) => r() < p;
   return r;
 }
-
-// ---- block profiles ----------------------------------------------------------
-// Slots 17-40 = block 0, 41-70 = block 1, 71-100 = block 2, 101-130 = block 3...
-function blockOf(slot) { return slot <= 40 ? 0 : Math.floor((slot - 41) / 30) + 1; }
-function blockRange(b) { return b === 0 ? [17, 40] : [41 + (b - 1) * 30, 70 + (b - 1) * 30]; }
-function profile(slot) {
-  const b = blockOf(slot); const [lo, hi] = blockRange(b); const u = (slot - lo) / (hi - lo); // 0..1 within block
-  if (b === 0) return { planets: [2, u < 0.5 ? 3 : 4], walls: u < 0.3 ? 0 : 1, orbit: 0.35, gates: 0, movers: 0,
-    taps: [1, u < 0.4 ? 2 : 3], ways: [10 + Math.round(20 * (1 - u)), 90] };
-  if (b === 1) return { planets: [2, 4], walls: u < 0.5 ? 1 : 2, orbit: 0.45, gates: u < 0.15 ? 0 : (u < 0.7 ? 1 : 2), movers: 0,
-    taps: [u < 0.3 ? 1 : 2, 3], ways: [6 + Math.round(8 * (1 - u)), 45] };
-  const extra = b - 2; // every later block nudges harder
-  return { planets: [3, 5], walls: 2, orbit: 0.5, gates: u < 0.5 ? 1 : 2, movers: u < 0.2 ? 1 : 2,
-    taps: [2, Math.min(4, 3 + (u > 0.6 ? 1 : 0) + Math.min(1, extra))], ways: [Math.max(3, 5 - extra), 28 - 3 * Math.min(4, extra)] };
-}
+const seedOf = (slot, attempt) => slot * 7919 + attempt * 104729 + 17;
+const attemptOf = (slot, seed) => Math.round((seed - slot * 7919 - 17) / 104729);
 
 // ---- geometry helpers --------------------------------------------------------
 const W = P.W, H = P.H;
@@ -210,19 +214,37 @@ function chooseGates(lv, count, r) {
 }
 
 // ---- verification ------------------------------------------------------------
+// v1.0 slots (1-100) keep their original check; newer slots must also pass
+// the quality gates.
 function verify(lv, prof) {
-  const res = solve(lv);
-  if (res.min === null || res.min !== lv.taps) return null;
-  let ways = 0; for (const k in res.found) ways += res.found[k];
-  if (ways < prof.ways[0] || ways > prof.ways[1] * 2) return null;
-  return { ways, example: res.example[res.min] };
+  if (prof.legacy) {
+    const res = solve(lv);
+    if (res.min === null || res.min !== lv.taps) return null;
+    let ways = 0; for (const k in res.found) ways += res.found[k];
+    if (ways < prof.ways[0] || ways > prof.ways[1] * 2) return null;
+    return { ways };
+  }
+  const m = Q.metrics(lv);
+  const g = Object.assign({}, prof.gate, { taps: lv.taps, ways: prof.ways });
+  return Q.gate(m, g).length ? null : m;
 }
+// how interesting a passing level is (ranks finale candidates): a long,
+// curling, board-filling path; more taps and fewer winning routes = harder.
+function interest(m) { return m.turn + 2 * m.span + 0.1 * Math.min(10, m.ratio) + m.slack + 0.5 * m.min - Math.min(150, m.ways) / 75; }
 
 // ---- one slot ------------------------------------------------------------------
-function generate(slot) {
+// Tries seeds from attempt `start` on until `want` levels pass.
+// relax = one tap lower at the top of the window (fallback for stuck slots).
+// Returns { level (the most interesting), candidates, attempts }.
+function generate(slot, start, want = 1, relax = false) {
   const prof = profile(slot);
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const r = rng(slot * 7919 + attempt * 104729 + 17);
+  if (relax) { prof.taps = [Math.max(1, prof.taps[0] - 1), Math.max(1, prof.taps[1] - 1)]; prof.finale = false; }
+  const cands = [];
+  const maxAttempts = prof.legacy ? 80 : prof.finale ? 600 : 150 * want;
+  const deadline = Date.now() + (prof.finale ? 120 : 600) * 1000;   // a finale job may fail; its siblings cover it
+  let attempt = start;
+  for (; attempt < start + maxAttempts && cands.length < want && Date.now() < deadline; attempt++) {
+    const seed = seedOf(slot, attempt), r = rng(seed);
     const lv = sampleLayout(r, prof); if (!lv) continue;
     const grids = reachGrid(lv, prof.taps[1], r);
     const goal = chooseGoal(lv, grids, prof, r); if (!goal) continue;
@@ -230,14 +252,15 @@ function generate(slot) {
     lv.taps = goal.k;
     if (prof.gates) { const gs = chooseGates(lv, prof.gates, r); if (gs) lv.gates = gs; }
     const v = verify(lv, prof); if (!v) continue;
-    const out = { taps: lv.taps, seed: slot * 7919 + attempt * 104729 + 17, ways: v.ways,
-      start: lv.start, active: lv.active };
+    const out = { taps: lv.taps, seed, ways: v.ways, start: lv.start, active: lv.active };
     if (lv.v0) out.v0 = lv.v0;
     out.planets = lv.planets; if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates;
     out.goal = lv.goal;
-    return out;
+    cands.push({ level: out, score: prof.legacy ? 0 : interest(v), m: v });
   }
-  return null;
+  if (!cands.length) return { level: null, candidates: [], attempts: attempt - start };
+  const best = cands.slice().sort((a, b) => b.score - a.score)[0];
+  return { level: best.level, m: best.m, score: best.score, candidates: cands.map((c) => c.level), attempts: attempt - start };
 }
 
 // ---- serialize ---------------------------------------------------------------
@@ -255,7 +278,7 @@ function serialize(levels) {
     return head + "\n" + body.join("\n");
   });
   return `/* Orbit Lock levels — GENERATED by tools/gen.js. Do not hand-edit the
-   generated entries here; edit tools/handmade.js for levels 1-${HANDMADE.length}, or
+   generated entries here; edit tools/handmade.js for hand-made levels, or
    re-run the generator (--from/--to) to reroll a slot. Every level is proven
    by tools/solve.js. Canvas 420 x 640; taps cycle planets in array order. */
 const LEVELS = [
@@ -266,27 +289,127 @@ if (typeof module !== "undefined") module.exports = LEVELS;
 }
 
 // ---- main ----------------------------------------------------------------------
-let existing = [];
-try { existing = require(OUT); } catch (_) {}
-const levels = HANDMADE.slice();
-const t0 = Date.now();
-for (let slot = HANDMADE.length + 1; slot <= COUNT; slot++) {
-  const prev = existing[slot - 1];
-  if ((slot < FROM || slot > TO) && prev && "seed" in prev) { levels.push(prev); continue; }
-  const ts = Date.now();
-  const lv = generate(slot);
-  if (!lv) { console.error(`slot ${slot}: FAILED to generate`); process.exitCode = 1; if (prev) levels.push(prev); continue; }
-  levels.push(lv);
-  console.log(`${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((p) => p.move).length} ${((Date.now() - ts) / 1000).toFixed(1)}s`);
+// the file being written is also the one read (so --out files can be iterated on)
+function loadExisting() { const f = fs.existsSync(OUT) ? OUT : DEFAULT_OUT; try { delete require.cache[require.resolve(f)]; return require(f); } catch (_) { return []; } }
+function write(levels, t0) {
+  if (args.includes("--dry")) return;
+  fs.writeFileSync(OUT, serialize(levels));
+  console.log(`wrote ${OUT} (${levels.length} levels)${t0 ? ` in ${((Date.now() - t0) / 1000).toFixed(0)}s` : ""}`);
 }
-// sort each generated block by a difficulty score (taps dominate, fewer ways = harder).
-// A partial reroll (--from/--to) keeps slots in place so the rest of the block is untouched.
-const REROLL = FROM > HANDMADE.length + 1 || TO < COUNT;
-function score(lv) { return lv.taps * 100 - Math.min(60, lv.ways) + (lv.gates ? lv.gates.length * 12 : 0) + lv.planets.filter((p) => p.move).length * 8 + lv.planets.length * 3; }
-for (let b = 0; ; b++) {
-  const [lo, hi] = blockRange(b); if (lo > levels.length) break;
-  const a = lo - 1, z = Math.min(hi, levels.length);
-  const seg = levels.slice(a, z);
-  if (!REROLL && seg.every((l) => "seed" in l)) { seg.sort((x, y) => score(x) - score(y)); levels.splice(a, seg.length, ...seg); }
+const tag = (p) => p.legacy ? "" : p.finale ? " finale" : p.breather ? " breather" : "";
+function describe(slot, lv, m, secs, attempts) {
+  const p = profile(slot);
+  const extra = m && m.slack !== undefined ? ` slack=${m.slack} t=${m.t} turn=${m.turn}` : "";
+  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
 }
-if (!DRY) { fs.writeFileSync(OUT, serialize(levels)); console.log(`wrote ${OUT} (${levels.length} levels) in ${((Date.now() - t0) / 1000).toFixed(0)}s`); }
+
+async function main() {
+  const existing = loadExisting();
+  // --pick S:I — swap in a saved finale candidate, nothing else
+  if (opt("--pick")) {
+    const [slot, idx] = opt("--pick").split(":").map(Number);
+    const cands = JSON.parse(fs.readFileSync(path.join(CAND_DIR, slot + ".json"), "utf8"));
+    if (!cands[idx - 1]) throw new Error(`slot ${slot} has ${cands.length} candidates`);
+    const levels = existing.slice(); levels[slot - 1] = cands[idx - 1];
+    write(levels); return;
+  }
+  const COUNT = Number(opt("--count", Math.max(100, existing.length)));
+  const FROM = Number(opt("--from", 1)), TO = Number(opt("--to", COUNT));
+  const JOBS = Number(opt("--jobs", Math.max(1, Math.min(16, os.cpus().length - 2))));
+  const FORCE = args.includes("--force");
+
+  // decide each slot: hand-made, kept, or generated (and from which attempt)
+  const levels = [], todo = [];
+  for (let slot = 1; slot <= COUNT; slot++) {
+    const hand = slot <= OPENERS.length ? OPENERS[slot - 1] : HANDMADE_AT[slot];
+    const prev = existing[slot - 1];
+    if (hand) { levels.push(hand); continue; }
+    const inRange = (args.includes("--from") || args.includes("--to")) && slot >= FROM && slot <= TO;
+    if (prev && "seed" in prev && !inRange) { levels.push(prev); continue; }
+    levels.push(null);
+    // rerolling an existing slot starts past the seed it has now
+    const start = prev && "seed" in prev && inRange ? attemptOf(slot, prev.seed) + 1 : 0;
+    const n = profile(slot).candidates || 1;
+    // finale candidates run as separate jobs on disjoint seed ranges
+    for (let j = 0; j < n; j++) todo.push({ slot, start: start + j * 1000, part: j, of: n });
+  }
+  const blocked = todo.filter((t) => profile(t.slot).need.length);
+  if (blocked.length && !FORCE) {
+    const needs = [...new Set(blocked.flatMap((t) => profile(t.slot).need))];
+    console.error(`slots ${blocked[0].slot}-${blocked[blocked.length - 1].slot} need mechanics that aren't built yet: ${needs.join(", ")}.\n` +
+      `Build them (tools/chapters.js INGREDIENTS.ready) or pass --force to test the pipeline with the ready ones only.`);
+    process.exit(1);
+  }
+  if (!todo.length) { write(levels); return; }
+  const slots = [...new Set(todo.map((t) => t.slot))];
+  todo.sort((a, b) => (b.of > 1) - (a.of > 1));   // slow finale jobs first
+
+  // generate in parallel; slots are independent (seeded per slot)
+  const t0 = Date.now();
+  console.log(`generating ${slots.length} slot(s) (${todo.length} jobs) on ${Math.min(JOBS, todo.length)} worker(s)...`);
+  const results = {};
+  await new Promise((resolve) => {
+    let next = 0, done = 0;
+    const workers = [];
+    const feed = (w) => { if (next < todo.length) { const t = todo[next++]; w.t0 = Date.now(); w.postMessage(t); } };
+    for (let i = 0; i < Math.min(JOBS, todo.length); i++) {
+      const w = new Worker(__filename, { argv: args }); workers.push(w);
+      w.on("message", (msg) => {
+        (results[msg.slot] = results[msg.slot] || []).push(msg);
+        const secs = (Date.now() - w.t0) / 1000, part = msg.of > 1 ? ` [candidate ${msg.part + 1}/${msg.of}]` : "";
+        if (msg.level) console.log(describe(msg.slot, msg.level, msg.m, secs, msg.attempts) + part);
+        else console.error(`${String(msg.slot).padStart(3)} FAILED after ${msg.attempts} attempts${part}`);
+        if (++done === todo.length) { workers.forEach((x) => x.terminate()); resolve(); } else feed(w);
+      });
+      feed(w);
+    }
+  });
+
+  // fill in, then reroll near-duplicates of anything earlier (in slot order)
+  let failed = 0;
+  for (const slot of slots) {
+    const ok = results[slot].filter((r) => r.level).sort((a, b) => a.part - b.part);
+    if (!ok.length) {   // every job failed: one relaxed retry here, else keep what was there
+      const r = generate(slot, 50000, 1, true);
+      if (r.level) { console.log(describe(slot, r.level, r.m, 0, r.attempts) + " [relaxed: one tap easier]"); levels[slot - 1] = r.level; }
+      else { failed++; levels[slot - 1] = existing[slot - 1] || null; console.error(`${String(slot).padStart(3)} still failing after a relaxed retry`); }
+      continue;
+    }
+    levels[slot - 1] = ok.slice().sort((a, b) => b.score - a.score)[0].level;   // most interesting
+    if (ok.length > 1) {
+      fs.mkdirSync(CAND_DIR, { recursive: true });
+      fs.writeFileSync(path.join(CAND_DIR, slot + ".json"), JSON.stringify(ok.map((r) => r.level)));
+      const chosen = ok.findIndex((r) => r.level === levels[slot - 1]) + 1;
+      console.log(`${String(slot).padStart(3)} kept candidate ${chosen} of ${ok.length} (see them: node tools/render.js --file tools/out/candidates/${slot}.json; swap: node tools/gen.js --pick ${slot}:N)`);
+    }
+  }
+  for (const slot of slots) {
+    let lv = levels[slot - 1]; if (!lv) continue;
+    for (let tries = 0; tries < 5; tries++) {
+      const dup = levels.slice(0, slot - 1).findIndex((o) => o && Q.similar(lv, o));
+      if (dup < 0) break;
+      console.log(`${String(slot).padStart(3)} near-duplicate of ${dup + 1}, rerolling`);
+      const r = generate(slot, attemptOf(slot, lv.seed) + 1);
+      if (!r.level) break;
+      lv = levels[slot - 1] = r.level;
+    }
+  }
+  // v1.0 blocks (17-40, 41-70, 71-100) were sorted by difficulty after a full regeneration
+  const legacyScore = (lv) => lv.taps * 100 - Math.min(60, lv.ways) + (lv.gates ? lv.gates.length * 12 : 0) + lv.planets.filter((p) => p.move).length * 8 + lv.planets.length * 3;
+  for (const [lo, hi] of [[17, 40], [41, 70], [71, 100]]) {
+    if (!slots.includes(lo) || !slots.includes(hi) || args.includes("--from") || args.includes("--to")) continue;
+    const seg = levels.slice(lo - 1, hi).filter(Boolean);
+    if (seg.length === hi - lo + 1) { seg.sort((a, b) => legacyScore(a) - legacyScore(b)); levels.splice(lo - 1, seg.length, ...seg); }
+  }
+  // never throw a batch away: write up to the first hole
+  const hole = levels.findIndex((l) => !l);
+  if (hole >= 0) { console.error(`slot ${hole + 1} could not be generated; writing levels 1-${hole} only`); levels.length = hole; process.exitCode = 1; }
+  write(levels, t0);
+  if (failed) { console.error(`${failed} slot(s) failed; kept their previous level`); process.exitCode = 1; }
+}
+
+if (isMainThread) main().catch((e) => { console.error(e); process.exit(1); });
+else parentPort.on("message", ({ slot, start, part, of }) => {
+  const r = generate(slot, start);
+  parentPort.postMessage({ slot, part, of, level: r.level, score: r.score || 0, m: r.m ? { slack: r.m.slack, t: r.m.t, turn: r.m.turn } : null, attempts: r.attempts });
+});

@@ -1,4 +1,5 @@
-/* Hand-made opening levels (1-16). tools/gen.js prepends these to the
+/* Hand-made levels. openers = levels 1-16; at = any later slot by number
+   (mechanic intros, e.g. at[101]). tools/gen.js merges these with the
    generated set and writes levels.js. Edit here, then re-run the generator. */
 const HANDMADE = [
   { taps: 0, hint: "Tap to launch. Gravity does the rest.",
@@ -86,4 +87,5 @@ const HANDMADE = [
     goal: { x: 210, y: 480, r: 26 },
     walls: [{ x: 150, y: 400, w: 120, h: 16 }] },
 ];
-if (typeof module !== "undefined") module.exports = HANDMADE;
+const AT = {};
+if (typeof module !== "undefined") module.exports = { openers: HANDMADE, at: AT };

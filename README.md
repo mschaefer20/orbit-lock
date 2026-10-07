@@ -47,19 +47,37 @@ Repo root: `package.json`, `capacitor.config.json`, `codemagic.yaml`, `ci/`
 Canvas is 420 x 640. Planets, walls, and leaving the screen are fatal.
 
 ## Levels: hand-made + generated
-`levels.js` is written by `tools/gen.js`. Levels 1-16 come from
-`tools/handmade.js`; the rest are generated per slot from a seed, then
-proven by the solver and sorted by difficulty inside fixed blocks
-(17-40, 41-70, 71-100, 101-130, ...). Blocks introduce elements quietly:
-walls and orbit starts early, checkpoint gates from the second block,
-drifting planets from the third.
+`levels.js` is written by `tools/gen.js`. Hand-made levels live in
+`tools/handmade.js` (`openers` = 1-16, `at[slot]` = any later slot, e.g.
+mechanic intros); everything else is generated per slot from a seed and
+proven by the solver.
 
-- `node tools/gen.js` — regenerate everything up to `--count` (default 100).
-  Slots already in levels.js are kept unless `--from A --to B` names them.
-- To add more levels: `node tools/gen.js --count 130`. Existing slots are
-  untouched; the new block gets its own difficulty ramp.
-- To reroll one level you dislike: `node tools/gen.js --from 57 --to 57`.
-- To change an opener: edit `tools/handmade.js` and re-run `gen.js`.
+What goes in each slot comes from `tools/chapters.js`: 20-level chapters
+(one per map landmark), aimed at most players stopping around 200 and a
+few reaching 500.
+- 1-100: v1.0 (walls, orbit starts, checkpoint gates, drifting planets).
+- 101-200: one new mechanic per chapter (giants + moons, repulsors,
+  wormholes, pulsars, ordered gates + drifting goal).
+- 201-500: remixes of known mechanics, harder; surprises at 301 (bouncy
+  walls) and 401 (wrap-around edges).
+Inside a chapter difficulty is a wave: easy opener, a breather at slot 10,
+and a finale on slot 20. `node tools/chapters.js` prints the plan and which
+mechanics each chapter still needs; the generator refuses slots whose
+mechanics aren't built (`INGREDIENTS[x].ready`) unless `--force`.
+
+New slots (101+) must pass quality gates (`tools/quality.js`), calibrated
+on v1.0's levels: timing slack (a 0.1 s mistake on one tap often still
+wins), a 1.5-10 s solution, a curving path (no straight shots), and no
+near-duplicate layout of any earlier level. Finales generate 8 candidates in
+parallel and keep the most interesting/hardest.
+
+- `node tools/gen.js --count 200` — generate missing slots up to 200 on all
+  cores. Existing slots are never touched unless named.
+- Reroll levels you dislike: `node tools/gen.js --from 57 --to 57` (a new seed).
+- Finale candidates: `node tools/render.js --file tools/out/candidates/120.json`
+  renders them; `node tools/gen.js --pick 120:3` swaps one in.
+- `--out FILE` writes (and reads) a scratch file instead of `www/levels.js`.
+- Review a chapter: `node tools/render.js 101 120` -> `tools/out/sheet-101-120.png`.
 - Bump `CACHE` in `sw.js` after any change.
 
 ## Level tools (Node, no deps)
@@ -67,8 +85,12 @@ drifting planets from the third.
   limit. Prints min taps, how many sequences win per tap count, and flags
   levels that can't be solved or that fewer than 4 sequences win (fragile).
   Exits 1 if anything is flagged, so it can gate a commit.
-- `node tools/render.js` — `tools/out/NN.png` per level with the min-tap
-  solution drawn, plus `tools/out/sheet.png` contact sheet.
+- `node tools/quality.js [from] [to]` — quality metrics per level (ways,
+  slack, solution time, path ratio, turns, board span, duplicates) plus
+  percentiles for calibrating the gates.
+- `node tools/render.js [from] [to] [--file F]` — `tools/out/NN.png` per level
+  with the most direct solution drawn (grey = no-tap path), plus one contact
+  sheet per chapter.
 - `node tools/cloud.js i` — reachability cloud: every 1-tap path (hue = tap
   time) and 2-tap paths (grey) for level i, to see where flips land.
 - `node tools/suggest.js i [k] [margin]` — lists 20 px cells reached by many

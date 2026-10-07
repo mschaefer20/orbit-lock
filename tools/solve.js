@@ -5,17 +5,19 @@
 const P = require("../www/physics.js");
 const LEVELS = require("../www/levels.js");
 
-function solve(level) {
+function solve(level, opts = {}) {
   const SLOTS = Math.ceil(P.TIME_LIMIT / (P.DT * P.STEPS_PER_SLOT));
   const found = {};          // taps -> count
   const example = {};        // taps -> first winning slot list
+  const wins = opts.collect ? [] : null;   // every winning slot list (capped), for tools/quality.js
+  const cap = opts.cap || 20000;
   let nodes = 0;
   function runSlot(s) {
     for (let i = 0; i < P.STEPS_PER_SLOT; i++) { if (P.step(s, level) !== "live") return; }
   }
   function dfs(s, slot, seq) {
     nodes++;
-    if (s.status === "won") { found[s.taps] = (found[s.taps] || 0) + 1; if (!example[s.taps]) example[s.taps] = seq.slice(); return; }
+    if (s.status === "won") { found[s.taps] = (found[s.taps] || 0) + 1; if (!example[s.taps]) example[s.taps] = seq.slice(); if (wins && wins.length < cap) wins.push(seq.slice()); return; }
     if (s.status !== "live" || slot >= SLOTS) return;
     // branch: tap at this slot (if any left), or don't
     if (s.taps < level.taps) {
@@ -25,7 +27,7 @@ function solve(level) {
   }
   const s0 = P.make(level); P.launch(s0); dfs(s0, 0, []);
   const taps = Object.keys(found).map(Number).sort((a, b) => a - b);
-  return { min: taps.length ? taps[0] : null, found, example, nodes };
+  return { min: taps.length ? taps[0] : null, found, example, nodes, wins };
 }
 
 module.exports = { solve };
