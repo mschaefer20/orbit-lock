@@ -79,6 +79,8 @@ workflows:
           keychain add-certificates
           xcode-project use-profiles
           ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" || true
+          # use-profiles can finish without touching the App target; set it explicitly
+          node ci/apply-signing.js
       - name: Set build number (Codemagic's monotonic build counter)
         script: |
           cd ios/App
