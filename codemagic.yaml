@@ -61,6 +61,7 @@ workflows:
           pod install
       - name: Fetch signing files & set up keychain (uses the API key)
         script: |
+          set -eo pipefail   # stop at the command that failed, not three steps later
           # Sign for exactly the bundle id the generated Xcode project uses,
           # and fail loudly here (not at archive time) if no profile applies.
           for v in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY; do
