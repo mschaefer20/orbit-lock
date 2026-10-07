@@ -38,8 +38,10 @@ Repo root: `package.json`, `capacitor.config.json`, `codemagic.yaml`, `ci/`
 ```js
 { taps, hint?,                            // taps = hard limit = the solver's minimum
   start: {x,y}, v0?: {x,y}, active: 0,   // initial pull index
-  planets: [{x,y,r, move?: {ax,ay,f,ph}}], // tap order = array order (wraps);
+  planets: [{x,y,r, g?, move?: {ax,ay,f,ph}}], // tap order = array order (wraps);
+                                           // g = pull multiplier (heavy >1, light <1);
                                            // move = drift offset (ax,ay)*sin(2*pi*f*t+ph)
+  moons?: [{x,y,r, move?}],                // inert, never pull, fatal to touch
   walls?: [{x,y,w,h}],
   gates?: [{x,y,r}],                       // rings that must all be touched before the goal
   goal: {x,y,r} }

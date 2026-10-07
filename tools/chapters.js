@@ -18,8 +18,8 @@ const INGREDIENTS = {
   orbit:     { ready: true },   // start in orbit around a planet
   gates:     { ready: true },   // checkpoint rings
   movers:    { ready: true },   // drifting planets
-  giants:    { ready: false },  // per-planet pull strength (heavy / light)
-  moons:     { ready: false },  // inert planets, never in the tap order
+  giants:    { ready: true },   // per-planet pull strength (heavy / light)
+  moons:     { ready: true },   // inert planets, never in the tap order
   repulsors: { ready: false },
   wormholes: { ready: false },
   pulsars:   { ready: false },  // walls / planets that blink on a rhythm
@@ -100,10 +100,15 @@ function profile(slot) {
     orbit: use.has("orbit") ? 0.45 : 0,
     gates: use.has("gates") ? (u < 0.3 ? 0 : u < 0.7 ? 1 : 2) : 0,
     movers: use.has("movers") ? (u < 0.4 ? 1 : 2) : 0,
+    giants: use.has("giants") ? (u < 0.5 ? 1 : 2) : 0,
+    heavyFirst: !!INTRO[ch] && k < 3,                 // the intro opens on heavy planets only
+    // moons arrive a few levels after the chapter opens (giants first)
+    moons: use.has("moons") ? (k < 4 && INTRO[ch] ? 0 : u < 0.6 ? 1 : 2) : 0,
     taps,
     ways: finale ? [5, 150] : [breather ? 20 : Math.max(late ? 4 : 6, ramp(late ? 12 : 20, late ? 4 : 6)), breather ? 400 : 150],
     // quality gates, calibrated against v1.0's levels (node tools/quality.js)
-    gate: { ways: null, slack: late ? 0.3 : (u < 0.5 ? 0.5 : 0.34), t: [1.5, 10], ratio: 1.2, turn: 0.4 },
+    gate: { ways: null, slack: late ? 0.3 : (u < 0.5 ? 0.5 : 0.34), t: [1.5, 10], ratio: 1.2, turn: 0.4,
+            moonGap: 45, giantUse: 0.25 },
     candidates: finale ? 8 : 1,
   };
 }

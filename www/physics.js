@@ -6,7 +6,10 @@
    - planet.move = { ax, ay, f, ph }: the planet drifts around its base
      position, offset = (ax, ay) * sin(2*pi*f*t + ph). Deterministic in t.
    - level.gates = [{x, y, r}]: rings that must all be touched (any order)
-     before the goal counts. */
+     before the goal counts.
+   - planet.g: pull strength multiplier (giants > 1, light planets < 1).
+   - level.moons = [{x, y, r, move?}]: inert bodies, never in the tap order
+     and never pulling; touching one is fatal like a planet. */
 (function (root) {
   const P = {
     W: 420, H: 640,
@@ -42,8 +45,8 @@
     },
 
     // Planet i's position at time t (base position unless it drifts).
-    planetPos(level, i, t) {
-      const p = level.planets[i];
+    planetPos(level, i, t) { return P.bodyPos(level.planets[i], t); },
+    bodyPos(p, t) {
       if (!p.move) return p;
       const k = Math.sin(6.283185307179586 * p.move.f * t + (p.move.ph || 0));
       return { x: p.x + p.move.ax * k, y: p.y + p.move.ay * k, r: p.r };
@@ -57,8 +60,9 @@
       const tp = P.planetPos(level, s.active, s.t);
       const dx = tp.x - s.x, dy = tp.y - s.y;
       const len = Math.hypot(dx, dy) || 1;
-      s.vx += (dx / len) * P.G * dt;
-      s.vy += (dy / len) * P.G * dt;
+      const pull = P.G * (level.planets[s.active].g || 1);
+      s.vx += (dx / len) * pull * dt;
+      s.vy += (dy / len) * pull * dt;
       if (s.vx > P.MAXV) s.vx = P.MAXV; else if (s.vx < -P.MAXV) s.vx = -P.MAXV;
       if (s.vy > P.MAXV) s.vy = P.MAXV; else if (s.vy < -P.MAXV) s.vy = -P.MAXV;
       s.x += s.vx * dt;
@@ -78,6 +82,10 @@
       for (let i = 0; i < level.planets.length; i++) {
         const p = P.planetPos(level, i, s.t);
         const rr = p.r + r;
+        if ((s.x - p.x) ** 2 + (s.y - p.y) ** 2 < rr * rr) { s.status = "lost"; s.why = "planet"; return s.status; }
+      }
+      if (level.moons) for (const m of level.moons) {
+        const p = P.bodyPos(m, s.t), rr = p.r + r;
         if ((s.x - p.x) ** 2 + (s.y - p.y) ** 2 < rr * rr) { s.status = "lost"; s.why = "planet"; return s.status; }
       }
       if (level.walls) for (const w of level.walls) {

@@ -9,6 +9,9 @@
    - ratio:    path length / straight start-goal distance (1 = a straight shot)
    - turn:     total heading change along that path, in full turns
    - span:     fraction of the board the path's bounding box covers
+   - moonGap:  closest the path comes to a moon's edge, px (null: no moons)
+   - giantUse: fraction of the path pulled by a heavy/light planet
+               (null: none in the level)
    gate(m, g) returns the list of failed checks (empty = pass).
    similar(a, b) flags near-duplicate layouts.
 
@@ -26,7 +29,7 @@ function trace(level, seq) {
   while (s.status === "live") {
     if (k % P.STEPS_PER_SLOT === 0) { if (si < seq.length && seq[si] === slot) { P.flip(s, level); si++; } slot++; }
     P.step(s, level); k++;
-    if (k % 3 === 0) pts.push({ x: s.x, y: s.y });
+    if (k % 3 === 0) pts.push({ x: s.x, y: s.y, a: s.active, t: s.t });
   }
   return { s, pts };
 }
@@ -58,15 +61,25 @@ function metrics(level) {
     if (d > 0.5) { const a = Math.atan2(dy, dx); if (prevA !== null) { let da = a - prevA; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; turn += Math.abs(da); } prevA = a; }
     minX = Math.min(minX, pts[i].x); maxX = Math.max(maxX, pts[i].x); minY = Math.min(minY, pts[i].y); maxY = Math.max(maxY, pts[i].y);
   }
+  let moonGap = null, giantUse = null;
+  if (level.moons && level.moons.length) {
+    moonGap = 1e9;
+    for (const q of pts) for (const mn of level.moons) { const p = P.bodyPos(mn, q.t); moonGap = Math.min(moonGap, Math.hypot(q.x - p.x, q.y - p.y) - p.r - P.ORB_R); }
+    moonGap = Math.round(moonGap);
+  }
+  if (level.planets.some((p) => p.g && p.g !== 1)) {
+    let n = 0; for (const q of pts) { const g = level.planets[q.a].g; if (g && g !== 1) n++; }
+    giantUse = +(n / Math.max(1, pts.length)).toFixed(2);
+  }
   const straight = Math.hypot(level.goal.x - level.start.x, level.goal.y - level.start.y) || 1;
   return {
     min: res.min, ways, slack: +slack.toFixed(2), t: +s.t.toFixed(1),
     ratio: +(len / straight).toFixed(2), turn: +(turn / (2 * Math.PI)).toFixed(2),
-    span: +(((maxX - minX) * (maxY - minY)) / (P.W * P.H)).toFixed(2), solution: best,
+    span: +(((maxX - minX) * (maxY - minY)) / (P.W * P.H)).toFixed(2), moonGap, giantUse, solution: best,
   };
 }
 
-// g = { ways: [lo, hi], slack, t: [lo, hi], ratio, turn }
+// g = { ways: [lo, hi], slack, t: [lo, hi], ratio, turn, moonGap?, giantUse? }
 function gate(m, g) {
   const fail = [];
   if (m.min === null) return ["unsolvable"];
@@ -77,6 +90,9 @@ function gate(m, g) {
   if (m.t < g.t[0] || m.t > g.t[1]) fail.push(`t ${m.t} outside ${g.t}`);
   if (m.ratio < g.ratio) fail.push(`ratio ${m.ratio} < ${g.ratio}`);
   if (m.turn < g.turn) fail.push(`turn ${m.turn} < ${g.turn}`);
+  // a new mechanic has to matter: the path skims a moon / rides a giant
+  if (g.moonGap !== undefined && m.moonGap !== null && m.moonGap > g.moonGap) fail.push(`moonGap ${m.moonGap} > ${g.moonGap}`);
+  if (g.giantUse !== undefined && m.giantUse !== null && m.giantUse < g.giantUse) fail.push(`giantUse ${m.giantUse} < ${g.giantUse}`);
   return fail;
 }
 

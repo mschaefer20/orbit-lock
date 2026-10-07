@@ -44,8 +44,11 @@ function render(level, i, tapSlots) {
   if (level.walls) for (const w of level.walls) im.rect(w.x, w.y, w.w, w.h, [70, 76, 130]);
   level.planets.forEach((p, k) => {
     im.circle(p.x, p.y, p.r, COLS[k % 4], true); im.circle(p.x, p.y, p.r + P.ORB_R, [40, 44, 80], false);
+    if (p.g > 1) for (const d of [10, 18]) im.circle(p.x, p.y, p.r + d, COLS[k % 4].map((v) => v * 0.6 | 0), false);   // heavy: halo rings
+    if (p.g < 1) im.circle(p.x, p.y, p.r * 0.45, [8, 9, 22], true);                                                  // light: hollow core
     if (p.move) im.line(p.x - p.move.ax, p.y - p.move.ay, p.x + p.move.ax, p.y + p.move.ay, [200, 200, 200]);
   });
+  if (level.moons) for (const m of level.moons) { im.circle(m.x, m.y, m.r, [150, 150, 165], true); im.circle(m.x, m.y, m.r + P.ORB_R, [40, 44, 80], false); }
   if (level.gates) for (const g of level.gates) { im.circle(g.x, g.y, g.r, [230, 230, 255], false); }
   im.circle(level.goal.x, level.goal.y, level.goal.r, [255, 216, 77], false);
   im.circle(level.goal.x, level.goal.y, level.goal.r - 2, [255, 216, 77], false);

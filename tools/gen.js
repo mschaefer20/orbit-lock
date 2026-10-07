@@ -60,13 +60,14 @@ function reach(p) { return p.r + (p.move ? Math.hypot(p.move.ax, p.move.ay) : 0)
 function wallHits(w, x, y, m) { return x > w.x - m && x < w.x + w.w + m && y > w.y - m && y < w.y + w.h + m; }
 function clearOf(lv, x, y, m) {
   for (const p of lv.planets) if (Math.hypot(x - p.x, y - p.y) < reach(p) + m) return false;
+  if (lv.moons) for (const p of lv.moons) if (Math.hypot(x - p.x, y - p.y) < p.r + m) return false;
   if (lv.walls) for (const w of lv.walls) if (wallHits(w, x, y, m)) return false;
   return true;
 }
 
 // ---- layout sampler ----------------------------------------------------------
 function sampleLayout(r, prof) {
-  const lv = { planets: [], walls: [], gates: [] };
+  const lv = { planets: [], walls: [], gates: [], moons: [] };
   const n = r.int(prof.planets[0], prof.planets[1]);
   for (let tries = 0; lv.planets.length < n && tries < 200; tries++) {
     const big = lv.planets.length === 0 && r.chance(0.2);
@@ -74,6 +75,19 @@ function sampleLayout(r, prof) {
     if (lv.planets.every((q) => dist(p, q) > p.r + q.r + 90)) lv.planets.push(p);
   }
   if (lv.planets.length < 2) return null;
+  // giants: heavy planets (stronger pull, drawn bigger) and light ones
+  if (prof.giants) {
+    const order = lv.planets.map((_, i) => i).sort(() => r() - 0.5).slice(0, prof.giants);
+    let heavy = prof.heavyFirst || r.chance(0.65);
+    for (const i of order) {
+      const p = lv.planets[i];
+      const nr = heavy ? r.int(42, 52) : r.int(20, 26);
+      const fits = lv.planets.every((q, j) => j === i || dist(p, q) > nr + q.r + 90) && p.x - nr > 20 && p.x + nr < W - 20 && p.y - nr > 50 && p.y + nr < H - 20;
+      if (fits) p.r = nr; else if (heavy) return null;   // a heavy planet must look heavy
+      p.g = heavy ? +(1.6 + r() * 0.3).toFixed(2) : +(0.5 + r() * 0.15).toFixed(2);
+      heavy = prof.heavyFirst || !heavy;
+    }
+  }
   // movers: drift amplitude kept clear of neighbours
   const nm = prof.movers ? r.int(Math.min(1, prof.movers), prof.movers) : 0;
   for (let k = 0; k < nm; k++) {
@@ -82,6 +96,15 @@ function sampleLayout(r, prof) {
     const mv = { ax: Math.round(Math.cos(ang) * amp), ay: Math.round(Math.sin(ang) * amp), f: +(0.12 + r() * 0.16).toFixed(3), ph: +(r() * 6.283).toFixed(2) };
     const ok = lv.planets.every((q, j) => j === i || dist(p, q) > p.r + q.r + amp + 60);
     if (ok && p.x - amp - p.r > 20 && p.x + amp + p.r < W - 20 && p.y - amp - p.r > 50 && p.y + amp + p.r < H - 20) p.move = mv;
+  }
+  // moons: inert rocks, placed between two planets where paths tend to run
+  for (let k = 0, tries = 0; k < (prof.moons || 0) && tries < 80; tries++) {
+    const a = r.pick(lv.planets), b = r.pick(lv.planets); if (a === b) continue;
+    const u = 0.3 + r() * 0.4, off = (r() - 0.5) * 120, d = dist(a, b) || 1;
+    const x = Math.round(a.x + (b.x - a.x) * u + (-(b.y - a.y) / d) * off), y = Math.round(a.y + (b.y - a.y) * u + ((b.x - a.x) / d) * off);
+    const m = { x, y, r: r.int(12, 19) };
+    if (x < 40 || x > W - 40 || y < 70 || y > H - 40) continue;
+    if (lv.planets.every((p) => dist(p, m) > reach(p) + m.r + 55) && lv.moons.every((q) => dist(q, m) > q.r + m.r + 70)) { lv.moons.push(m); k++; }
   }
   // walls
   const nw = r.int(0, prof.walls);
@@ -93,7 +116,7 @@ function sampleLayout(r, prof) {
       const qx = Math.max(w.x, Math.min(p.x, w.x + w.w)), qy = Math.max(w.y, Math.min(p.y, w.y + w.h));
       return Math.hypot(p.x - qx, p.y - qy) > reach(p) + 45;
     });
-    const okW = lv.walls.every((v) => !wallHits(v, cx, cy, 60));
+    const okW = lv.walls.every((v) => !wallHits(v, cx, cy, 60)) && lv.moons.every((m) => !wallHits(w, m.x, m.y, m.r + 40));
     if (okP && okW) { lv.walls.push(w); k++; }
   }
   // start: at rest, or in orbit around a planet
@@ -117,6 +140,7 @@ function sampleLayout(r, prof) {
   }
   if (!lv.start) return null;
   if (!lv.walls.length) delete lv.walls;
+  if (!lv.moons.length) delete lv.moons;
   delete lv.gates;
   return lv;
 }
@@ -254,7 +278,7 @@ function generate(slot, start, want = 1, relax = false) {
     const v = verify(lv, prof); if (!v) continue;
     const out = { taps: lv.taps, seed, ways: v.ways, start: lv.start, active: lv.active };
     if (lv.v0) out.v0 = lv.v0;
-    out.planets = lv.planets; if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates;
+    out.planets = lv.planets; if (lv.moons) out.moons = lv.moons; if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates;
     out.goal = lv.goal;
     cands.push({ level: out, score: prof.legacy ? 0 : interest(v), m: v });
   }
@@ -272,6 +296,7 @@ function serialize(levels) {
     const body = [];
     body.push(`    start: ${fmt(o.start)}` + (o.v0 ? `, v0: ${fmt(o.v0)}` : "") + `, active: ${o.active || 0},`);
     body.push(`    planets: [${o.planets.map(fmt).join(", ")}],`);
+    if (o.moons) body.push(`    moons: [${o.moons.map(fmt).join(", ")}],`);
     if (o.walls) body.push(`    walls: [${o.walls.map(fmt).join(", ")}],`);
     if (o.gates) body.push(`    gates: [${o.gates.map(fmt).join(", ")}],`);
     body.push(`    goal: ${fmt(o.goal)} },`);
@@ -300,7 +325,7 @@ const tag = (p) => p.legacy ? "" : p.finale ? " finale" : p.breather ? " breathe
 function describe(slot, lv, m, secs, attempts) {
   const p = profile(slot);
   const extra = m && m.slack !== undefined ? ` slack=${m.slack} t=${m.t} turn=${m.turn}` : "";
-  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
+  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${lv.moons ? ` moons=${lv.moons.length}` : ""}${lv.planets.some((q) => q.g) ? ` giants=${lv.planets.filter((q) => q.g).length}` : ""}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
 }
 
 async function main() {

@@ -385,6 +385,10 @@
     const firstMover = LEVELS.findIndex((l) => l.planets.some((p) => p.move));
     if (levelIndex === firstWith("gates")) return "Pass through every white ring before the goal.";
     if (levelIndex === firstMover) return "Some planets drift now. Watch the track.";
+    const firstPlanet = (f) => LEVELS.findIndex((l) => l.planets.some(f));
+    if (levelIndex === firstPlanet((p) => p.g > 1)) return "Ringed planets are heavy: they pull harder.";
+    if (levelIndex === firstPlanet((p) => p.g < 1)) return "Hollow planets are light: their pull is weak.";
+    if (levelIndex === firstWith("moons")) return "Grey moons never pull, but hitting one still ends the run.";
     return null;
   }
   function setFooter() {
@@ -524,6 +528,16 @@
       ctx.globalAlpha = 1;
     });
 
+    // moons: inert grey rocks, fatal to touch
+    if (level.moons) for (const mb of level.moons) {
+      const m = P.bodyPos(mb, s.t);
+      ctx.fillStyle = "#8a8ca3"; ctx.globalAlpha = 0.85; circle(m.x, m.y, m.r); ctx.fill();
+      ctx.fillStyle = "#5d5f78";   // a couple of craters
+      circle(m.x - m.r * 0.3, m.y - m.r * 0.25, m.r * 0.28); ctx.fill();
+      circle(m.x + m.r * 0.35, m.y + m.r * 0.3, m.r * 0.18); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     // planets
     level.planets.forEach((pb, i) => {
       const c = COLS[i % 4];
@@ -542,6 +556,16 @@
       grd.addColorStop(0, c); grd.addColorStop(0.7, c); grd.addColorStop(1, "rgba(5,6,15,0.1)");
       ctx.globalAlpha = active ? 0.95 : 0.4;
       ctx.fillStyle = grd; circle(p.x, p.y, R); ctx.fill();
+      if (pb.g > 1) { // heavy: gravity rings drifting inward
+        ctx.strokeStyle = c; ctx.lineWidth = 1.5;
+        for (let k = 0; k < 2; k++) {
+          const ph = (clock * 0.5 + k / 2) % 1;
+          ctx.globalAlpha = (active ? 0.5 : 0.25) * ph;
+          circle(p.x, p.y, p.r + 6 + 18 * (1 - ph)); ctx.stroke();
+        }
+      } else if (pb.g < 1) { // light: hollow core
+        ctx.globalAlpha = 0.85; ctx.fillStyle = tn.bg; circle(p.x, p.y, p.r * 0.42); ctx.fill();
+      }
       ctx.globalAlpha = active ? 0.5 : 0.22;
       ctx.strokeStyle = c; ctx.lineWidth = 1; circle(p.x, p.y, p.r); ctx.stroke();
       ctx.globalAlpha = 1;
