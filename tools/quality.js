@@ -12,6 +12,10 @@
    - moonGap:  closest the path comes to a moon's edge, px (null: no moons)
    - giantUse: fraction of the path pulled by a heavy/light planet
                (null: none in the level)
+   - pushUse:  fraction of the path pushed by a repulsor (null: none)
+   - teleports: wormhole trips along the path (null: no wormholes)
+   - blinkPass: times the path crosses a pulsar wall while it is open
+               (null: no pulsar walls)
    gate(m, g) returns the list of failed checks (empty = pass).
    similar(a, b) flags near-duplicate layouts.
 
@@ -25,13 +29,22 @@ function key(seq) { return seq.join(","); }
 // Replays a tap sequence (0.1 s slots) and records the path.
 function trace(level, seq) {
   const s = P.make(level); P.launch(s);
-  const pts = []; let slot = 0, k = 0, si = 0;
+  const pts = []; let slot = 0, k = 0, si = 0, teleports = 0, blinkPass = 0;
+  const inside = (level.walls || []).map(() => false);
   while (s.status === "live") {
     if (k % P.STEPS_PER_SLOT === 0) { if (si < seq.length && seq[si] === slot) { P.flip(s, level); si++; } slot++; }
+    const hole = s.hole;
     P.step(s, level); k++;
+    if (s.hole >= 0 && s.hole !== hole) teleports++;
+    if (level.walls) level.walls.forEach((w, i) => {
+      if (!w.blink) return;
+      const now = s.x > w.x - P.ORB_R && s.x < w.x + w.w + P.ORB_R && s.y > w.y - P.ORB_R && s.y < w.y + w.h + P.ORB_R;
+      if (now && !inside[i]) blinkPass++;
+      inside[i] = now;
+    });
     if (k % 3 === 0) pts.push({ x: s.x, y: s.y, a: s.active, t: s.t });
   }
-  return { s, pts };
+  return { s, pts, teleports, blinkPass };
 }
 
 function metrics(level) {
@@ -53,7 +66,7 @@ function metrics(level) {
     if (f > slack) { slack = f; best = w; }
   }
   // path shape of the most forgiving solution
-  const { s, pts } = trace(level, best);
+  const { s, pts, teleports, blinkPass } = trace(level, best);
   let len = 0, turn = 0, minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9, prevA = null;
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i - 1].x, dy = pts[i].y - pts[i - 1].y, d = Math.hypot(dx, dy);
@@ -67,19 +80,23 @@ function metrics(level) {
     for (const q of pts) for (const mn of level.moons) { const p = P.bodyPos(mn, q.t); moonGap = Math.min(moonGap, Math.hypot(q.x - p.x, q.y - p.y) - p.r - P.ORB_R); }
     moonGap = Math.round(moonGap);
   }
-  if (level.planets.some((p) => p.g && p.g !== 1)) {
-    let n = 0; for (const q of pts) { const g = level.planets[q.a].g; if (g && g !== 1) n++; }
-    giantUse = +(n / Math.max(1, pts.length)).toFixed(2);
-  }
+  const useOf = (f) => {
+    if (!level.planets.some((p) => f(p.g))) return null;
+    let n = 0; for (const q of pts) if (f(level.planets[q.a].g)) n++;
+    return +(n / Math.max(1, pts.length)).toFixed(2);
+  };
+  giantUse = useOf((g) => g > 0 && g !== 1);
+  const pushUse = useOf((g) => g < 0);
   const straight = Math.hypot(level.goal.x - level.start.x, level.goal.y - level.start.y) || 1;
   return {
     min: res.min, ways, slack: +slack.toFixed(2), t: +s.t.toFixed(1),
     ratio: +(len / straight).toFixed(2), turn: +(turn / (2 * Math.PI)).toFixed(2),
-    span: +(((maxX - minX) * (maxY - minY)) / (P.W * P.H)).toFixed(2), moonGap, giantUse, solution: best,
+    span: +(((maxX - minX) * (maxY - minY)) / (P.W * P.H)).toFixed(2), moonGap, giantUse, pushUse,
+    teleports: level.holes ? teleports : null, blinkPass: (level.walls || []).some((w) => w.blink) ? blinkPass : null, solution: best,
   };
 }
 
-// g = { ways: [lo, hi], slack, t: [lo, hi], ratio, turn, moonGap?, giantUse? }
+// g = { ways: [lo, hi], slack, t: [lo, hi], ratio, turn, moonGap?, giantUse?, pushUse?, teleports?, blinkPass? }
 function gate(m, g) {
   const fail = [];
   if (m.min === null) return ["unsolvable"];
@@ -92,7 +109,8 @@ function gate(m, g) {
   if (m.turn < g.turn) fail.push(`turn ${m.turn} < ${g.turn}`);
   // a new mechanic has to matter: the path skims a moon / rides a giant
   if (g.moonGap !== undefined && m.moonGap !== null && m.moonGap > g.moonGap) fail.push(`moonGap ${m.moonGap} > ${g.moonGap}`);
-  if (g.giantUse !== undefined && m.giantUse !== null && m.giantUse < g.giantUse) fail.push(`giantUse ${m.giantUse} < ${g.giantUse}`);
+  for (const k of ["giantUse", "pushUse", "teleports", "blinkPass"])
+    if (g[k] !== undefined && m[k] !== null && m[k] < g[k]) fail.push(`${k} ${m[k]} < ${g[k]}`);
   return fail;
 }
 

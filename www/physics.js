@@ -7,9 +7,17 @@
      position, offset = (ax, ay) * sin(2*pi*f*t + ph). Deterministic in t.
    - level.gates = [{x, y, r}]: rings that must all be touched (any order)
      before the goal counts.
-   - planet.g: pull strength multiplier (giants > 1, light planets < 1).
+   - planet.g: pull strength multiplier (giants > 1, light planets < 1,
+     repulsors < 0: they push instead of pull).
    - level.moons = [{x, y, r, move?}]: inert bodies, never in the tap order
-     and never pulling; touching one is fatal like a planet. */
+     and never pulling; touching one is fatal like a planet.
+   - level.holes = [{a: {x, y}, b: {x, y}, r}]: wormholes. Entering one end
+     moves the orb to the other, velocity unchanged; that hole is inert
+     until the orb has left both ends.
+   - wall.blink = { on, off, ph }: a pulsar wall, solid only for `on` s of
+     every on+off cycle (shifted by ph).
+   - level.ordered: gates count only in array order (numbered in the game).
+   - goal.move: the goal drifts like a planet. */
 (function (root) {
   const P = {
     W: 420, H: 640,
@@ -26,7 +34,7 @@
         x: level.start.x, y: level.start.y,
         vx: level.v0 ? level.v0.x : 0, vy: level.v0 ? level.v0.y : 0,
         active: level.active || 0,
-        taps: 0, t: 0, got: 0,
+        taps: 0, t: 0, got: 0, hole: -1,
         status: "idle",   // idle | live | won | lost
         why: "",
       };
@@ -52,6 +60,14 @@
       return { x: p.x + p.move.ax * k, y: p.y + p.move.ay * k, r: p.r };
     },
 
+    wallOn(w, t) {
+      if (!w.blink) return true;
+      const per = w.blink.on + w.blink.off;
+      return ((t + (w.blink.ph || 0)) % per + per) % per < w.blink.on;
+    },
+    // gate i is touched at (x, y): does it count yet?
+    gateOpen(level, s, i) { return !level.ordered || s.got === (1 << i) - 1; },
+
     allGates(level) { return level.gates ? (1 << level.gates.length) - 1 : 0; },
 
     step(s, level) {
@@ -70,12 +86,26 @@
       s.t += dt;
 
       const r = P.ORB_R;
+      if (level.holes) {
+        if (s.hole >= 0) {   // re-arm once clear of both ends
+          const h = level.holes[s.hole], m = (h.r + r) ** 2;
+          if ((s.x - h.a.x) ** 2 + (s.y - h.a.y) ** 2 > m && (s.x - h.b.x) ** 2 + (s.y - h.b.y) ** 2 > m) s.hole = -1;
+        }
+        for (let i = 0; i < level.holes.length; i++) {
+          if (i === s.hole) continue;
+          const h = level.holes[i], rr = h.r * h.r;
+          let from = null, to = null;
+          if ((s.x - h.a.x) ** 2 + (s.y - h.a.y) ** 2 < rr) { from = h.a; to = h.b; }
+          else if ((s.x - h.b.x) ** 2 + (s.y - h.b.y) ** 2 < rr) { from = h.b; to = h.a; }
+          if (from) { s.x += to.x - from.x; s.y += to.y - from.y; s.hole = i; break; }
+        }
+      }
       if (level.gates) for (let i = 0; i < level.gates.length; i++) {
         const gt = level.gates[i];
-        if ((s.x - gt.x) ** 2 + (s.y - gt.y) ** 2 < gt.r * gt.r) s.got |= 1 << i;
+        if ((s.x - gt.x) ** 2 + (s.y - gt.y) ** 2 < gt.r * gt.r && P.gateOpen(level, s, i)) s.got |= 1 << i;
       }
       // goal first: touching the ring counts even if a hazard is adjacent
-      const g = level.goal;
+      const g = P.bodyPos(level.goal, s.t);
       if (s.got === P.allGates(level) && (s.x - g.x) ** 2 + (s.y - g.y) ** 2 < g.r * g.r) { s.status = "won"; return s.status; }
 
       if (s.x < -r || s.x > P.W + r || s.y < -r || s.y > P.H + r) { s.status = "lost"; s.why = "space"; return s.status; }
@@ -89,6 +119,7 @@
         if ((s.x - p.x) ** 2 + (s.y - p.y) ** 2 < rr * rr) { s.status = "lost"; s.why = "planet"; return s.status; }
       }
       if (level.walls) for (const w of level.walls) {
+        if (w.blink && !P.wallOn(w, s.t)) continue;
         const cx = Math.max(w.x, Math.min(s.x, w.x + w.w));
         const cy = Math.max(w.y, Math.min(s.y, w.y + w.h));
         if ((s.x - cx) ** 2 + (s.y - cy) ** 2 < r * r) { s.status = "lost"; s.why = "wall"; return s.status; }

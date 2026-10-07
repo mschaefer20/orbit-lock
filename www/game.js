@@ -8,6 +8,7 @@
   const ctx = canvas.getContext("2d");
   const COLS = ["#ff5e7e", "#4dd2ff", "#b48cff", "#7dffa0"];
   const GOLD = "#ffd84d";
+  const HOLE_COLS = ["#ff78ff", "#78ffe0"];
   const SAVE_KEY = "orbitlock.v1";
 
   // ---- persistence -------------------------------------------------------
@@ -389,6 +390,11 @@
     if (levelIndex === firstPlanet((p) => p.g > 1)) return "Ringed planets are heavy: they pull harder.";
     if (levelIndex === firstPlanet((p) => p.g < 1)) return "Hollow planets are light: their pull is weak.";
     if (levelIndex === firstWith("moons")) return "Grey moons never pull, but hitting one still ends the run.";
+    if (levelIndex === firstPlanet((p) => p.g < 0)) return "Spiked planets push you away instead of pulling.";
+    if (levelIndex === firstWith("holes")) return "Wormholes: fly into one end, come out the other.";
+    if (levelIndex === LEVELS.findIndex((l) => l.walls && l.walls.some((w) => w.blink))) return "Amber walls blink. Pass while they're open.";
+    if (levelIndex === LEVELS.findIndex((l) => l.ordered)) return "Numbered rings: touch them in order.";
+    if (levelIndex === LEVELS.findIndex((l) => l.goal.move)) return "The goal drifts now. Time your arrival.";
     return null;
   }
   function setFooter() {
@@ -466,7 +472,11 @@
     while (i < pts.length) {
       const a = pts[i].a; const j0 = i - 1;
       ctx.beginPath(); ctx.moveTo(pts[j0].x, pts[j0].y);
-      while (i < pts.length && pts[i].a === a) { ctx.lineTo(pts[i].x, pts[i].y); i++; }
+      while (i < pts.length && pts[i].a === a) {   // a wormhole jump breaks the line
+        const far = Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y) > 60;
+        if (far) ctx.moveTo(pts[i].x, pts[i].y); else ctx.lineTo(pts[i].x, pts[i].y);
+        i++;
+      }
       ctx.strokeStyle = mono ? "rgba(160,166,210," + alpha + ")" : COLS[a % 4];
       ctx.globalAlpha = mono ? 1 : alpha; ctx.stroke(); ctx.globalAlpha = 1;
     }
@@ -491,16 +501,50 @@
     ctx.globalAlpha = 1;
 
     if (level.walls) for (const w of level.walls) {
+      if (w.blink) { // pulsar wall: amber when solid, a dashed ghost when open
+        const t = s.t, on = P.wallOn(w, t);
+        const per = w.blink.on + w.blink.off, ph = ((t + (w.blink.ph || 0)) % per + per) % per;
+        const left = on ? w.blink.on - ph : per - ph;   // seconds until it switches
+        if (on) {
+          ctx.fillStyle = "#c9762e"; ctx.shadowBlur = 10; ctx.shadowColor = "#ff9a3c";
+          ctx.globalAlpha = left < 0.25 ? 0.55 + 0.45 * Math.sin(clock * 40) ** 2 : 1;   // flicker before it opens
+          rr(w.x, w.y, w.w, w.h, 6); ctx.fill(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+        } else {
+          ctx.strokeStyle = "#ff9a3c"; ctx.globalAlpha = left < 0.25 ? 0.8 : 0.35; ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 5]); rr(w.x, w.y, w.w, w.h, 6); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
+        continue;
+      }
       // Tidal barrier look: rounded slab with a soft glow
       ctx.fillStyle = "#3a4080"; ctx.shadowBlur = 8; ctx.shadowColor = "#5a63c0";
       rr(w.x, w.y, w.w, w.h, 6); ctx.fill(); ctx.shadowBlur = 0;
     }
 
+    // wormholes: both ends of a pair share a colour and spin
+    if (level.holes) level.holes.forEach((h, i) => {
+      const c = HOLE_COLS[i % HOLE_COLS.length];
+      for (const [e, dir] of [[h.a, 1], [h.b, -1]]) {
+        const grd = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, h.r);
+        grd.addColorStop(0, "rgba(5,6,15,1)"); grd.addColorStop(0.6, "rgba(5,6,15,0.9)"); grd.addColorStop(1, c);
+        ctx.globalAlpha = 0.9; ctx.fillStyle = grd; circle(e.x, e.y, h.r); ctx.fill();
+        ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.globalAlpha = s.hole === i ? 0.35 : 0.9;
+        for (let k = 0; k < 3; k++) {
+          const a0 = dir * clock * 2.2 + k * 2.094;
+          ctx.beginPath(); ctx.arc(e.x, e.y, h.r - 3, a0, a0 + 1.2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+
     drawTrail(ghost, 0.22, true);
     drawTrail(trail, 0.6, false);
 
-    // goal ring
-    const g = level.goal, pulse = 0.5 + 0.5 * Math.sin(clock * 3);
+    // goal ring (it may drift: faint track)
+    if (level.goal.move) {
+      const gb = level.goal; ctx.strokeStyle = GOLD; ctx.globalAlpha = 0.18; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(gb.x - gb.move.ax, gb.y - gb.move.ay); ctx.lineTo(gb.x + gb.move.ax, gb.y + gb.move.ay); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    const g = P.bodyPos(level.goal, s.t), pulse = 0.5 + 0.5 * Math.sin(clock * 3);
     ctx.strokeStyle = GOLD; ctx.lineWidth = 2.5;
     ctx.shadowColor = GOLD; ctx.shadowBlur = 8 + 8 * pulse;
     circle(g.x, g.y, g.r - 2); ctx.stroke();
@@ -524,7 +568,12 @@
       ctx.strokeStyle = got ? GOLD : "#eef0ff"; ctx.globalAlpha = got ? 0.9 : 0.55; ctx.lineWidth = got ? 2.5 : 1.5;
       if (got) { ctx.shadowColor = GOLD; ctx.shadowBlur = 10; }
       circle(gt.x, gt.y, gt.r - 2); ctx.stroke(); ctx.shadowBlur = 0;
-      if (!got) { ctx.globalAlpha = 0.35; circle(gt.x, gt.y, 3); ctx.fillStyle = "#eef0ff"; ctx.fill(); }
+      if (!got && level.ordered) { // numbered; the next one glows
+        const next = P.gateOpen(level, s, i);
+        ctx.globalAlpha = next ? 0.95 : 0.45; ctx.fillStyle = "#eef0ff";
+        ctx.font = "700 13px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(i + 1), gt.x, gt.y + 1); ctx.textBaseline = "alphabetic";
+      } else if (!got) { ctx.globalAlpha = 0.35; circle(gt.x, gt.y, 3); ctx.fillStyle = "#eef0ff"; ctx.fill(); }
       ctx.globalAlpha = 1;
     });
 
@@ -556,14 +605,25 @@
       grd.addColorStop(0, c); grd.addColorStop(0.7, c); grd.addColorStop(1, "rgba(5,6,15,0.1)");
       ctx.globalAlpha = active ? 0.95 : 0.4;
       ctx.fillStyle = grd; circle(p.x, p.y, R); ctx.fill();
-      if (pb.g > 1) { // heavy: gravity rings drifting inward
+      if (pb.g < 0) { // repulsor: spikes and rings drifting outward
+        ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.globalAlpha = active ? 0.9 : 0.45;
+        for (let k = 0; k < 8; k++) {
+          const a = k * 0.785 + clock * 0.4, cs = Math.cos(a), sn = Math.sin(a);
+          ctx.beginPath(); ctx.moveTo(p.x + cs * (p.r + 3), p.y + sn * (p.r + 3)); ctx.lineTo(p.x + cs * (p.r + 10), p.y + sn * (p.r + 10)); ctx.stroke();
+        }
+        if (active) for (let k = 0; k < 2; k++) {
+          const ph = (clock * 0.6 + k / 2) % 1;
+          ctx.globalAlpha = 0.45 * (1 - ph); ctx.lineWidth = 1.5;
+          circle(p.x, p.y, p.r + 8 + 26 * ph); ctx.stroke();
+        }
+      } else if (pb.g > 1) { // heavy: gravity rings drifting inward
         ctx.strokeStyle = c; ctx.lineWidth = 1.5;
         for (let k = 0; k < 2; k++) {
           const ph = (clock * 0.5 + k / 2) % 1;
           ctx.globalAlpha = (active ? 0.5 : 0.25) * ph;
           circle(p.x, p.y, p.r + 6 + 18 * (1 - ph)); ctx.stroke();
         }
-      } else if (pb.g < 1) { // light: hollow core
+      } else if (pb.g > 0 && pb.g < 1) { // light: hollow core
         ctx.globalAlpha = 0.85; ctx.fillStyle = tn.bg; circle(p.x, p.y, p.r * 0.42); ctx.fill();
       }
       ctx.globalAlpha = active ? 0.5 : 0.22;

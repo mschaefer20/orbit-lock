@@ -61,13 +61,14 @@ function wallHits(w, x, y, m) { return x > w.x - m && x < w.x + w.w + m && y > w
 function clearOf(lv, x, y, m) {
   for (const p of lv.planets) if (Math.hypot(x - p.x, y - p.y) < reach(p) + m) return false;
   if (lv.moons) for (const p of lv.moons) if (Math.hypot(x - p.x, y - p.y) < p.r + m) return false;
+  if (lv.holes) for (const h of lv.holes) for (const e of [h.a, h.b]) if (Math.hypot(x - e.x, y - e.y) < h.r + m) return false;
   if (lv.walls) for (const w of lv.walls) if (wallHits(w, x, y, m)) return false;
   return true;
 }
 
 // ---- layout sampler ----------------------------------------------------------
 function sampleLayout(r, prof) {
-  const lv = { planets: [], walls: [], gates: [], moons: [] };
+  const lv = { planets: [], walls: [], gates: [], moons: [], holes: [] };
   const n = r.int(prof.planets[0], prof.planets[1]);
   for (let tries = 0; lv.planets.length < n && tries < 200; tries++) {
     const big = lv.planets.length === 0 && r.chance(0.2);
@@ -97,6 +98,13 @@ function sampleLayout(r, prof) {
     const ok = lv.planets.every((q, j) => j === i || dist(p, q) > p.r + q.r + amp + 60);
     if (ok && p.x - amp - p.r > 20 && p.x + amp + p.r < W - 20 && p.y - amp - p.r > 50 && p.y + amp + p.r < H - 20) p.move = mv;
   }
+  // repulsors: push instead of pull (never every planet)
+  if (prof.repulsors) {
+    const free = lv.planets.map((_, i) => i).filter((i) => !lv.planets[i].g).sort(() => r() - 0.5);
+    const n = Math.min(prof.repulsors, lv.planets.length - 1, free.length);
+    if (!n) return null;
+    for (const i of free.slice(0, n)) { lv.planets[i].g = -+(0.7 + r() * 0.3).toFixed(2); lv.planets[i].r = Math.min(lv.planets[i].r, r.int(22, 30)); }
+  }
   // moons: inert rocks, placed between two planets where paths tend to run
   for (let k = 0, tries = 0; k < (prof.moons || 0) && tries < 80; tries++) {
     const a = r.pick(lv.planets), b = r.pick(lv.planets); if (a === b) continue;
@@ -106,8 +114,8 @@ function sampleLayout(r, prof) {
     if (x < 40 || x > W - 40 || y < 70 || y > H - 40) continue;
     if (lv.planets.every((p) => dist(p, m) > reach(p) + m.r + 55) && lv.moons.every((q) => dist(q, m) > q.r + m.r + 70)) { lv.moons.push(m); k++; }
   }
-  // walls
-  const nw = r.int(0, prof.walls);
+  // walls (pulsar levels always have their blinking ones)
+  const nw = Math.max(r.int(0, prof.walls), prof.pulsars || 0);
   for (let k = 0, tries = 0; k < nw && tries < 100; tries++) {
     const horiz = r.chance(0.65); const len = r.int(100, 220), th = r.int(14, 18);
     const w = horiz ? { x: r.int(0, W - len), y: r.int(120, H - 120), w: len, h: th } : { x: r.int(60, W - 60), y: r.int(80, H - 80 - len), w: th, h: len };
@@ -119,6 +127,20 @@ function sampleLayout(r, prof) {
     const okW = lv.walls.every((v) => !wallHits(v, cx, cy, 60)) && lv.moons.every((m) => !wallHits(w, m.x, m.y, m.r + 40));
     if (okP && okW) { lv.walls.push(w); k++; }
   }
+  if (prof.pulsars) {
+    if (lv.walls.length < prof.pulsars) return null;
+    // the longest walls blink: they are the ones worth waiting for
+    lv.walls.slice().sort((a, b) => (b.w + b.h) - (a.w + a.h)).slice(0, prof.pulsars).forEach((w) => {
+      w.blink = { on: +(0.7 + r() * 0.7).toFixed(1), off: +(0.6 + r() * 0.6).toFixed(1), ph: +(r() * 2).toFixed(1) };
+    });
+  }
+  // wormholes: two ends far apart, clear of everything
+  for (let k = 0, tries = 0; k < (prof.holes || 0) && tries < 120; tries++) {
+    const a = { x: r.int(40, W - 40), y: r.int(70, H - 40) }, b = { x: r.int(40, W - 40), y: r.int(70, H - 40) };
+    if (dist(a, b) < 220 || !clearOf(lv, a.x, a.y, 70) || !clearOf(lv, b.x, b.y, 70)) continue;
+    lv.holes.push({ a, b, r: 20 }); k++;
+  }
+  if (lv.holes.length < (prof.holes || 0)) return null;
   // start: at rest, or in orbit around a planet
   lv.active = r.int(0, lv.planets.length - 1);
   if (r.chance(prof.orbit)) {
@@ -141,6 +163,7 @@ function sampleLayout(r, prof) {
   if (!lv.start) return null;
   if (!lv.walls.length) delete lv.walls;
   if (!lv.moons.length) delete lv.moons;
+  if (!lv.holes.length) delete lv.holes;
   delete lv.gates;
   return lv;
 }
@@ -213,12 +236,12 @@ function chooseGoal(lv, grids, prof, r) {
 function chooseGates(lv, count, r) {
   // cells visited (before the goal) by winners; gates go on well-trodden ones
   const probe = Object.assign({}, lv, { gates: undefined });
-  const freq = new Uint16Array(CW * CH); let wins = 0;
+  const freq = new Uint16Array(CW * CH), when = new Float64Array(CW * CH); let wins = 0;
   for (const seq of sequences(lv.taps, r)) {
-    const seen = new Uint8Array(CW * CH);
-    const s = runSeq(probe, seq, (cx, cy) => { if (cx >= 0 && cy >= 0 && cx < CW && cy < CH) seen[cy * CW + cx] = 1; });
+    const seen = new Float32Array(CW * CH);   // first-visit time + 1 (0 = never)
+    const s = runSeq(probe, seq, (cx, cy, st) => { if (cx >= 0 && cy >= 0 && cx < CW && cy < CH && !seen[cy * CW + cx]) seen[cy * CW + cx] = st.t + 1; });
     if (s.status !== "won") continue;
-    wins++; for (let j = 0; j < seen.length; j++) if (seen[j]) freq[j]++;
+    wins++; for (let j = 0; j < seen.length; j++) if (seen[j]) { freq[j]++; when[j] += seen[j] - 1; }
   }
   if (!wins) return null;
   const cands = [];
@@ -227,13 +250,14 @@ function chooseGates(lv, count, r) {
     if (f < 0.35 || f > 0.95) continue;
     if (!clearOf(lv, x, y, 30)) continue;
     if (Math.hypot(x - lv.start.x, y - lv.start.y) < 110 || Math.hypot(x - lv.goal.x, y - lv.goal.y) < 90) continue;
-    cands.push({ x, y, r: 18, f });
+    cands.push({ x, y, r: 18, f, t: when[j] / freq[j] });
   }
   const gates = [];
   for (let tries = 0; gates.length < count && cands.length && tries < 40; tries++) {
     const c = r.pick(cands);
-    if (gates.every((g) => Math.hypot(g.x - c.x, g.y - c.y) > 100)) gates.push({ x: c.x, y: c.y, r: 18 });
+    if (gates.every((g) => Math.hypot(g.x - c.x, g.y - c.y) > 100)) gates.push({ x: c.x, y: c.y, r: 18, t: c.t });
   }
+  gates.sort((a, b) => a.t - b.t).forEach((g) => delete g.t);   // the order winners pass them in
   return gates.length ? gates : null;
 }
 
@@ -264,7 +288,7 @@ function generate(slot, start, want = 1, relax = false) {
   const prof = profile(slot);
   if (relax) { prof.taps = [Math.max(1, prof.taps[0] - 1), Math.max(1, prof.taps[1] - 1)]; prof.finale = false; }
   const cands = [];
-  const maxAttempts = prof.legacy ? 80 : prof.finale ? 600 : 150 * want;
+  const maxAttempts = prof.legacy ? 80 : prof.finale ? 600 : 400 * want;
   const deadline = Date.now() + (prof.finale ? 120 : 600) * 1000;   // a finale job may fail; its siblings cover it
   let attempt = start;
   for (; attempt < start + maxAttempts && cands.length < want && Date.now() < deadline; attempt++) {
@@ -274,11 +298,22 @@ function generate(slot, start, want = 1, relax = false) {
     const goal = chooseGoal(lv, grids, prof, r); if (!goal) continue;
     lv.goal = { x: goal.x, y: goal.y, r: r.int(22, 28) };
     lv.taps = goal.k;
-    if (prof.gates) { const gs = chooseGates(lv, prof.gates, r); if (gs) lv.gates = gs; }
+    if (prof.gates) {
+      const gs = chooseGates(lv, prof.gates, r); if (gs) lv.gates = gs;
+      if (prof.ordered) { if (!gs || gs.length < 2) continue; lv.ordered = true; }
+    }
+    if (prof.driftgoal && r.chance(prof.driftgoal)) {
+      const amp = r.int(25, 55), ang = r() * Math.PI * 2;
+      lv.goal.move = { ax: Math.round(Math.cos(ang) * amp), ay: Math.round(Math.sin(ang) * amp), f: +(0.12 + r() * 0.12).toFixed(3), ph: +(r() * 6.283).toFixed(2) };
+      const g = lv.goal;
+      if (!clearOf(lv, g.x + g.move.ax, g.y + g.move.ay, 44) || !clearOf(lv, g.x - g.move.ax, g.y - g.move.ay, 44) ||
+          g.x - amp < 30 || g.x + amp > W - 30 || g.y - amp < 30 || g.y + amp > H - 30) delete g.move;
+    }
     const v = verify(lv, prof); if (!v) continue;
     const out = { taps: lv.taps, seed, ways: v.ways, start: lv.start, active: lv.active };
     if (lv.v0) out.v0 = lv.v0;
-    out.planets = lv.planets; if (lv.moons) out.moons = lv.moons; if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates;
+    out.planets = lv.planets; if (lv.moons) out.moons = lv.moons; if (lv.holes) out.holes = lv.holes;
+    if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates; if (lv.ordered) out.ordered = true;
     out.goal = lv.goal;
     cands.push({ level: out, score: prof.legacy ? 0 : interest(v), m: v });
   }
@@ -297,8 +332,9 @@ function serialize(levels) {
     body.push(`    start: ${fmt(o.start)}` + (o.v0 ? `, v0: ${fmt(o.v0)}` : "") + `, active: ${o.active || 0},`);
     body.push(`    planets: [${o.planets.map(fmt).join(", ")}],`);
     if (o.moons) body.push(`    moons: [${o.moons.map(fmt).join(", ")}],`);
+    if (o.holes) body.push(`    holes: [${o.holes.map(fmt).join(", ")}],`);
     if (o.walls) body.push(`    walls: [${o.walls.map(fmt).join(", ")}],`);
-    if (o.gates) body.push(`    gates: [${o.gates.map(fmt).join(", ")}],`);
+    if (o.gates) body.push(`    gates: [${o.gates.map(fmt).join(", ")}],` + (o.ordered ? " ordered: true," : ""));
     body.push(`    goal: ${fmt(o.goal)} },`);
     return head + "\n" + body.join("\n");
   });
@@ -325,7 +361,7 @@ const tag = (p) => p.legacy ? "" : p.finale ? " finale" : p.breather ? " breathe
 function describe(slot, lv, m, secs, attempts) {
   const p = profile(slot);
   const extra = m && m.slack !== undefined ? ` slack=${m.slack} t=${m.t} turn=${m.turn}` : "";
-  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${lv.moons ? ` moons=${lv.moons.length}` : ""}${lv.planets.some((q) => q.g) ? ` giants=${lv.planets.filter((q) => q.g).length}` : ""}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
+  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${lv.moons ? ` moons=${lv.moons.length}` : ""}${lv.planets.some((q) => q.g > 0) ? ` giants=${lv.planets.filter((q) => q.g > 0).length}` : ""}${lv.planets.some((q) => q.g < 0) ? ` push=${lv.planets.filter((q) => q.g < 0).length}` : ""}${lv.holes ? ` holes=${lv.holes.length}` : ""}${(lv.walls || []).some((w) => w.blink) ? ` pulsars=${lv.walls.filter((w) => w.blink).length}` : ""}${lv.ordered ? " ordered" : ""}${lv.goal.move ? " driftgoal" : ""}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
 }
 
 async function main() {

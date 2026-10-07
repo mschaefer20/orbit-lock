@@ -39,12 +39,15 @@ Repo root: `package.json`, `capacitor.config.json`, `codemagic.yaml`, `ci/`
 { taps, hint?,                            // taps = hard limit = the solver's minimum
   start: {x,y}, v0?: {x,y}, active: 0,   // initial pull index
   planets: [{x,y,r, g?, move?: {ax,ay,f,ph}}], // tap order = array order (wraps);
-                                           // g = pull multiplier (heavy >1, light <1);
+                                           // g = pull multiplier (heavy >1, light <1,
+                                           //     repulsor <0 pushes);
                                            // move = drift offset (ax,ay)*sin(2*pi*f*t+ph)
   moons?: [{x,y,r, move?}],                // inert, never pull, fatal to touch
-  walls?: [{x,y,w,h}],
+  holes?: [{a:{x,y}, b:{x,y}, r}],         // wormhole pairs: enter one end, exit the other
+  walls?: [{x,y,w,h, blink?: {on,off,ph}}], // blink = pulsar wall, solid for `on` s per cycle
   gates?: [{x,y,r}],                       // rings that must all be touched before the goal
-  goal: {x,y,r} }
+  ordered?: true,                          // ...in array order (numbered in the game)
+  goal: {x,y,r, move?} }                   // move = drifting goal
 ```
 Canvas is 420 x 640. Planets, walls, and leaving the screen are fatal.
 
@@ -59,7 +62,7 @@ What goes in each slot comes from `tools/chapters.js`: 20-level chapters
 few reaching 500.
 - 1-100: v1.0 (walls, orbit starts, checkpoint gates, drifting planets).
 - 101-200: one new mechanic per chapter (giants + moons, repulsors,
-  wormholes, pulsars, ordered gates + drifting goal).
+  wormholes, pulsars, ordered gates + drifting goal). Built and generated.
 - 201-500: remixes of known mechanics, harder; surprises at 301 (bouncy
   walls) and 401 (wrap-around edges).
 Inside a chapter difficulty is a wave: easy opener, a breather at slot 10,
@@ -69,7 +72,9 @@ mechanics aren't built (`INGREDIENTS[x].ready`) unless `--force`.
 
 New slots (101+) must pass quality gates (`tools/quality.js`), calibrated
 on v1.0's levels: timing slack (a 0.1 s mistake on one tap often still
-wins), a 1.5-10 s solution, a curving path (no straight shots), and no
+wins), a 1.5-10 s solution, a curving path (no straight shots), the
+new mechanic actually used by the solution (skims a moon, rides a giant or
+repulsor, takes a wormhole, slips through an open pulsar wall), and no
 near-duplicate layout of any earlier level. Finales generate 8 candidates in
 parallel and keep the most interesting/hardest.
 

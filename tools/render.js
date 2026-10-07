@@ -41,15 +41,26 @@ function trajectory(level, tapSlots) {
 
 function render(level, i, tapSlots) {
   const im = new Img();
-  if (level.walls) for (const w of level.walls) im.rect(w.x, w.y, w.w, w.h, [70, 76, 130]);
+  if (level.walls) for (const w of level.walls) {
+    if (!w.blink) { im.rect(w.x, w.y, w.w, w.h, [70, 76, 130]); continue; }
+    const c = [230, 140, 60];   // pulsar wall: outline only
+    im.line(w.x, w.y, w.x + w.w, w.y, c); im.line(w.x, w.y + w.h, w.x + w.w, w.y + w.h, c);
+    im.line(w.x, w.y, w.x, w.y + w.h, c); im.line(w.x + w.w, w.y, w.x + w.w, w.y + w.h, c);
+  }
+  if (level.holes) for (const h of level.holes) for (const e of [h.a, h.b]) { im.circle(e.x, e.y, h.r, [255, 120, 255], false); im.circle(e.x, e.y, h.r - 5, [255, 120, 255], false); }
   level.planets.forEach((p, k) => {
     im.circle(p.x, p.y, p.r, COLS[k % 4], true); im.circle(p.x, p.y, p.r + P.ORB_R, [40, 44, 80], false);
     if (p.g > 1) for (const d of [10, 18]) im.circle(p.x, p.y, p.r + d, COLS[k % 4].map((v) => v * 0.6 | 0), false);   // heavy: halo rings
-    if (p.g < 1) im.circle(p.x, p.y, p.r * 0.45, [8, 9, 22], true);                                                  // light: hollow core
+    if (p.g > 0 && p.g < 1) im.circle(p.x, p.y, p.r * 0.45, [8, 9, 22], true);                                      // light: hollow core
+    if (p.g < 0) for (let a = 0; a < 8; a++) { const c = Math.cos(a * Math.PI / 4), d = Math.sin(a * Math.PI / 4); im.line(p.x + c * (p.r + 3), p.y + d * (p.r + 3), p.x + c * (p.r + 12), p.y + d * (p.r + 12), COLS[k % 4]); }   // repulsor: spikes
     if (p.move) im.line(p.x - p.move.ax, p.y - p.move.ay, p.x + p.move.ax, p.y + p.move.ay, [200, 200, 200]);
   });
   if (level.moons) for (const m of level.moons) { im.circle(m.x, m.y, m.r, [150, 150, 165], true); im.circle(m.x, m.y, m.r + P.ORB_R, [40, 44, 80], false); }
-  if (level.gates) for (const g of level.gates) { im.circle(g.x, g.y, g.r, [230, 230, 255], false); }
+  if (level.gates) level.gates.forEach((g, n) => {
+    im.circle(g.x, g.y, g.r, [230, 230, 255], false);
+    if (level.ordered) for (let d = 0; d <= n; d++) im.circle(g.x - 5 * n + 10 * d, g.y, 2, [230, 230, 255], true);   // order as dots
+  });
+  if (level.goal.move) { const g = level.goal; im.line(g.x - g.move.ax, g.y - g.move.ay, g.x + g.move.ax, g.y + g.move.ay, [255, 216, 77]); }
   im.circle(level.goal.x, level.goal.y, level.goal.r, [255, 216, 77], false);
   im.circle(level.goal.x, level.goal.y, level.goal.r - 2, [255, 216, 77], false);
   // no-tap path (grey) for reference
