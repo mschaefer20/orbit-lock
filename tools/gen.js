@@ -115,7 +115,7 @@ function sampleLayout(r, prof) {
     if (lv.planets.every((p) => dist(p, m) > reach(p) + m.r + 55) && lv.moons.every((q) => dist(q, m) > q.r + m.r + 70)) { lv.moons.push(m); k++; }
   }
   // walls (pulsar levels always have their blinking ones)
-  const nw = Math.max(r.int(0, prof.walls), prof.pulsars || 0);
+  const nw = Math.max(r.int(0, prof.walls), (prof.pulsars || 0) + (prof.bouncy || 0));
   for (let k = 0, tries = 0; k < nw && tries < 100; tries++) {
     const horiz = r.chance(0.65); const len = r.int(100, 220), th = r.int(14, 18);
     const w = horiz ? { x: r.int(0, W - len), y: r.int(120, H - 120), w: len, h: th } : { x: r.int(60, W - 60), y: r.int(80, H - 80 - len), w: th, h: len };
@@ -134,6 +134,12 @@ function sampleLayout(r, prof) {
       w.blink = { on: +(0.7 + r() * 0.7).toFixed(1), off: +(0.6 + r() * 0.6).toFixed(1), ph: +(r() * 2).toFixed(1) };
     });
   }
+  if (prof.bouncy) {   // bouncy walls: any of the solid, steady ones
+    const plain = lv.walls.filter((w) => !w.blink).sort(() => r() - 0.5);
+    if (plain.length < prof.bouncy) return null;
+    plain.slice(0, prof.bouncy).forEach((w) => { w.bounce = true; });
+  }
+  if (prof.wrap) lv.wrap = true;
   // wormholes: two ends far apart, clear of everything
   for (let k = 0, tries = 0; k < (prof.holes || 0) && tries < 120; tries++) {
     const a = { x: r.int(40, W - 40), y: r.int(70, H - 40) }, b = { x: r.int(40, W - 40), y: r.int(70, H - 40) };
@@ -313,7 +319,7 @@ function generate(slot, start, want = 1, relax = false) {
     const out = { taps: lv.taps, seed, ways: v.ways, start: lv.start, active: lv.active };
     if (lv.v0) out.v0 = lv.v0;
     out.planets = lv.planets; if (lv.moons) out.moons = lv.moons; if (lv.holes) out.holes = lv.holes;
-    if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates; if (lv.ordered) out.ordered = true;
+    if (lv.walls) out.walls = lv.walls; if (lv.gates) out.gates = lv.gates; if (lv.ordered) out.ordered = true; if (lv.wrap) out.wrap = true;
     out.goal = lv.goal;
     cands.push({ level: out, score: prof.legacy ? 0 : interest(v), m: v });
   }
@@ -329,7 +335,7 @@ function serialize(levels) {
     const o = Object.assign({}, lv); const gen = "seed" in o;
     const head = `  // ${i + 1}\n  { taps: ${o.taps}` + (o.hint ? `, hint: ${JSON.stringify(o.hint)}` : "") + (gen ? `, seed: ${o.seed}, ways: ${o.ways}` : "") + ",";
     const body = [];
-    body.push(`    start: ${fmt(o.start)}` + (o.v0 ? `, v0: ${fmt(o.v0)}` : "") + `, active: ${o.active || 0},`);
+    body.push(`    start: ${fmt(o.start)}` + (o.v0 ? `, v0: ${fmt(o.v0)}` : "") + `, active: ${o.active || 0},` + (o.wrap ? " wrap: true," : ""));
     body.push(`    planets: [${o.planets.map(fmt).join(", ")}],`);
     if (o.moons) body.push(`    moons: [${o.moons.map(fmt).join(", ")}],`);
     if (o.holes) body.push(`    holes: [${o.holes.map(fmt).join(", ")}],`);
@@ -361,7 +367,7 @@ const tag = (p) => p.legacy ? "" : p.finale ? " finale" : p.breather ? " breathe
 function describe(slot, lv, m, secs, attempts) {
   const p = profile(slot);
   const extra = m && m.slack !== undefined ? ` slack=${m.slack} t=${m.t} turn=${m.turn}` : "";
-  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${lv.moons ? ` moons=${lv.moons.length}` : ""}${lv.planets.some((q) => q.g > 0) ? ` giants=${lv.planets.filter((q) => q.g > 0).length}` : ""}${lv.planets.some((q) => q.g < 0) ? ` push=${lv.planets.filter((q) => q.g < 0).length}` : ""}${lv.holes ? ` holes=${lv.holes.length}` : ""}${(lv.walls || []).some((w) => w.blink) ? ` pulsars=${lv.walls.filter((w) => w.blink).length}` : ""}${lv.ordered ? " ordered" : ""}${lv.goal.move ? " driftgoal" : ""}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
+  return `${String(slot).padStart(3)} taps=${lv.taps} ways=${lv.ways} planets=${lv.planets.length} walls=${(lv.walls || []).length} gates=${(lv.gates || []).length} movers=${lv.planets.filter((q) => q.move).length}${lv.moons ? ` moons=${lv.moons.length}` : ""}${lv.planets.some((q) => q.g > 0) ? ` giants=${lv.planets.filter((q) => q.g > 0).length}` : ""}${lv.planets.some((q) => q.g < 0) ? ` push=${lv.planets.filter((q) => q.g < 0).length}` : ""}${lv.holes ? ` holes=${lv.holes.length}` : ""}${(lv.walls || []).some((w) => w.blink) ? ` pulsars=${lv.walls.filter((w) => w.blink).length}` : ""}${lv.ordered ? " ordered" : ""}${(lv.walls || []).some((w) => w.bounce) ? ` bouncy=${lv.walls.filter((w) => w.bounce).length}` : ""}${lv.wrap ? " wrap" : ""}${lv.goal.move ? " driftgoal" : ""}${extra}${tag(p)}  ${secs.toFixed(1)}s/${attempts}`;
 }
 
 async function main() {

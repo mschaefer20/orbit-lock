@@ -42,10 +42,15 @@ function trajectory(level, tapSlots) {
 function render(level, i, tapSlots) {
   const im = new Img();
   if (level.walls) for (const w of level.walls) {
+    if (w.bounce) { im.rect(w.x, w.y, w.w, w.h, [70, 200, 150]); continue; }
     if (!w.blink) { im.rect(w.x, w.y, w.w, w.h, [70, 76, 130]); continue; }
     const c = [230, 140, 60];   // pulsar wall: outline only
     im.line(w.x, w.y, w.x + w.w, w.y, c); im.line(w.x, w.y + w.h, w.x + w.w, w.y + w.h, c);
     im.line(w.x, w.y, w.x, w.y + w.h, c); im.line(w.x + w.w, w.y, w.x + w.w, w.y + w.h, c);
+  }
+  if (level.wrap) for (let i = 0; i < H; i += 8) {   // dotted border = edges wrap
+    if (i < W) { im.px(i, 0, [120, 200, 255]); im.px(i, H - 1, [120, 200, 255]); }
+    im.px(0, i, [120, 200, 255]); im.px(W - 1, i, [120, 200, 255]);
   }
   if (level.holes) for (const h of level.holes) for (const e of [h.a, h.b]) { im.circle(e.x, e.y, h.r, [255, 120, 255], false); im.circle(e.x, e.y, h.r - 5, [255, 120, 255], false); }
   level.planets.forEach((p, k) => {
@@ -65,9 +70,10 @@ function render(level, i, tapSlots) {
   im.circle(level.goal.x, level.goal.y, level.goal.r - 2, [255, 216, 77], false);
   // no-tap path (grey) for reference
   const base = trajectory(level, []);
-  for (let j = 1; j < base.pts.length; j++) im.line(base.pts[j - 1].x, base.pts[j - 1].y, base.pts[j].x, base.pts[j].y, [60, 60, 70]);
+  const jump = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 60;   // wormhole / wrap: don't draw across
+  for (let j = 1; j < base.pts.length; j++) if (!jump(base.pts[j - 1], base.pts[j])) im.line(base.pts[j - 1].x, base.pts[j - 1].y, base.pts[j].x, base.pts[j].y, [60, 60, 70]);
   const tr = trajectory(level, tapSlots);
-  for (let j = 1; j < tr.pts.length; j++) im.line(tr.pts[j - 1].x, tr.pts[j - 1].y, tr.pts[j].x, tr.pts[j].y, COLS[tr.pts[j].a % 4].map((v) => v * 0.85 | 0));
+  for (let j = 1; j < tr.pts.length; j++) if (!jump(tr.pts[j - 1], tr.pts[j])) im.line(tr.pts[j - 1].x, tr.pts[j - 1].y, tr.pts[j].x, tr.pts[j].y, COLS[tr.pts[j].a % 4].map((v) => v * 0.85 | 0));
   for (const t of tr.tapPts) im.circle(t.x, t.y, 5, [255, 255, 255], true);
   im.circle(level.start.x, level.start.y, P.ORB_R, [255, 255, 255], false);
   fs.mkdirSync(path.join(__dirname, "out"), { recursive: true });

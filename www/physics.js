@@ -17,13 +17,17 @@
    - wall.blink = { on, off, ph }: a pulsar wall, solid only for `on` s of
      every on+off cycle (shifted by ph).
    - level.ordered: gates count only in array order (numbered in the game).
-   - goal.move: the goal drifts like a planet. */
+   - goal.move: the goal drifts like a planet.
+   - wall.bounce: the orb rebounds off this wall instead of crashing.
+   - level.wrap: leaving one screen edge brings the orb in at the opposite
+     one (never "lost to space"). */
 (function (root) {
   const P = {
     W: 420, H: 640,
     G: 800,           // px/s^2 pull toward the active planet
     MAXV: 460,        // speed clamp per axis
     DAMP: 0.55,       // momentum kept on a flip (reversal registers instantly)
+    BOUNCE: 0.9,      // speed kept by a rebound off a bouncy wall
     ORB_R: 11,
     DT: 1 / 120,      // fixed step
     TIME_LIMIT: 16,   // s before a run is called "lost to space"
@@ -34,7 +38,7 @@
         x: level.start.x, y: level.start.y,
         vx: level.v0 ? level.v0.x : 0, vy: level.v0 ? level.v0.y : 0,
         active: level.active || 0,
-        taps: 0, t: 0, got: 0, hole: -1,
+        taps: 0, t: 0, got: 0, hole: -1, bounces: 0, wraps: 0,
         status: "idle",   // idle | live | won | lost
         why: "",
       };
@@ -108,7 +112,12 @@
       const g = P.bodyPos(level.goal, s.t);
       if (s.got === P.allGates(level) && (s.x - g.x) ** 2 + (s.y - g.y) ** 2 < g.r * g.r) { s.status = "won"; return s.status; }
 
-      if (s.x < -r || s.x > P.W + r || s.y < -r || s.y > P.H + r) { s.status = "lost"; s.why = "space"; return s.status; }
+      if (level.wrap) {
+        const ox = s.x, oy = s.y;
+        if (s.x < -r) s.x += P.W + 2 * r; else if (s.x > P.W + r) s.x -= P.W + 2 * r;
+        if (s.y < -r) s.y += P.H + 2 * r; else if (s.y > P.H + r) s.y -= P.H + 2 * r;
+        if (s.x !== ox || s.y !== oy) s.wraps++;
+      } else if (s.x < -r || s.x > P.W + r || s.y < -r || s.y > P.H + r) { s.status = "lost"; s.why = "space"; return s.status; }
       for (let i = 0; i < level.planets.length; i++) {
         const p = P.planetPos(level, i, s.t);
         const rr = p.r + r;
@@ -122,6 +131,18 @@
         if (w.blink && !P.wallOn(w, s.t)) continue;
         const cx = Math.max(w.x, Math.min(s.x, w.x + w.w));
         const cy = Math.max(w.y, Math.min(s.y, w.y + w.h));
+        if (w.bounce) {
+          let nx = s.x - cx, ny = s.y - cy, d = Math.hypot(nx, ny);
+          if (d >= r) continue;
+          if (d < 1e-6) {   // centre inside the slab: push out the shallowest side
+            const pen = [s.x - w.x, w.x + w.w - s.x, s.y - w.y, w.y + w.h - s.y], k = pen.indexOf(Math.min(...pen));
+            nx = [-1, 1, 0, 0][k]; ny = [0, 0, -1, 1][k];
+            s.x = k === 0 ? w.x - r : k === 1 ? w.x + w.w + r : s.x; s.y = k === 2 ? w.y - r : k === 3 ? w.y + w.h + r : s.y;
+          } else { nx /= d; ny /= d; s.x = cx + nx * r; s.y = cy + ny * r; }
+          const vn = s.vx * nx + s.vy * ny;
+          if (vn < 0) { s.vx -= (1 + P.BOUNCE) * vn * nx; s.vy -= (1 + P.BOUNCE) * vn * ny; s.bounces++; }
+          continue;
+        }
         if ((s.x - cx) ** 2 + (s.y - cy) ** 2 < r * r) { s.status = "lost"; s.why = "wall"; return s.status; }
       }
       if (s.t > P.TIME_LIMIT) { s.status = "lost"; s.why = "time"; }

@@ -44,7 +44,9 @@ Repo root: `package.json`, `capacitor.config.json`, `codemagic.yaml`, `ci/`
                                            // move = drift offset (ax,ay)*sin(2*pi*f*t+ph)
   moons?: [{x,y,r, move?}],                // inert, never pull, fatal to touch
   holes?: [{a:{x,y}, b:{x,y}, r}],         // wormhole pairs: enter one end, exit the other
-  walls?: [{x,y,w,h, blink?: {on,off,ph}}], // blink = pulsar wall, solid for `on` s per cycle
+  walls?: [{x,y,w,h, blink?: {on,off,ph}, bounce?}], // blink = pulsar wall, solid for `on` s per cycle;
+                                           // bounce = orb rebounds instead of crashing
+  wrap?: true,                             // screen edges wrap around
   gates?: [{x,y,r}],                       // rings that must all be touched before the goal
   ordered?: true,                          // ...in array order (numbered in the game)
   goal: {x,y,r, move?} }                   // move = drifting goal
@@ -64,7 +66,7 @@ few reaching 500.
 - 101-200: one new mechanic per chapter (giants + moons, repulsors,
   wormholes, pulsars, ordered gates + drifting goal). Built and generated.
 - 201-500: remixes of known mechanics, harder; surprises at 301 (bouncy
-  walls) and 401 (wrap-around edges).
+  walls) and 401 (wrap-around edges). Built and generated.
 Inside a chapter difficulty is a wave: easy opener, a breather at slot 10,
 and a finale on slot 20. `node tools/chapters.js` prints the plan and which
 mechanics each chapter still needs; the generator refuses slots whose
@@ -74,7 +76,8 @@ New slots (101+) must pass quality gates (`tools/quality.js`), calibrated
 on v1.0's levels: timing slack (a 0.1 s mistake on one tap often still
 wins), a 1.5-10 s solution, a curving path (no straight shots), the
 new mechanic actually used by the solution (skims a moon, rides a giant or
-repulsor, takes a wormhole, slips through an open pulsar wall), and no
+repulsor, takes a wormhole, slips through an open pulsar wall, rebounds
+off a bouncy wall at most 3 times without buzzing along it, wraps an edge), and no
 near-duplicate layout of any earlier level. Finales generate 8 candidates in
 parallel and keep the most interesting/hardest.
 

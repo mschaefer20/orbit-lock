@@ -25,8 +25,8 @@ const INGREDIENTS = {
   pulsars:   { ready: true },   // walls that blink on a rhythm
   ordered:   { ready: true },   // numbered gates, passed in order
   driftgoal: { ready: true },
-  bouncy:    { ready: false },  // walls that reflect instead of kill
-  wrap:      { ready: false },  // screen edges wrap around
+  bouncy:    { ready: true },  // walls that reflect instead of kill
+  wrap:      { ready: true },  // screen edges wrap around
 };
 const BASE = ["walls", "orbit", "gates", "movers"];
 
@@ -106,6 +106,8 @@ function profile(slot) {
     repulsors: use.has("repulsors") ? (u < 0.6 ? 1 : 2) : 0,
     holes: use.has("wormholes") ? (u < 0.7 || late ? 1 : 2) : 0,
     pulsars: use.has("pulsars") ? (u < 0.5 ? 1 : 2) : 0,
+    bouncy: use.has("bouncy") ? (u < 0.5 ? 1 : 2) : 0,
+    wrap: use.has("wrap"),
     // a drifting goal joins a few levels into its intro chapter
     driftgoal: use.has("driftgoal") ? (k < 4 && INTRO[ch] ? 0 : 0.7) : 0,
     // moons arrive a few levels after the chapter opens (giants first)
@@ -114,7 +116,7 @@ function profile(slot) {
     ways: finale ? [5, 150] : [breather ? 20 : Math.max(late ? 4 : 6, ramp(late ? 12 : 20, late ? 4 : 6)), breather ? 400 : 150],
     // quality gates, calibrated against v1.0's levels (node tools/quality.js)
     gate: { ways: null, slack: late ? 0.3 : (u < 0.5 ? 0.5 : 0.34), t: [1.5, 10], ratio: 1.2, turn: 0.4,
-            moonGap: 45, giantUse: 0.25, pushUse: 0.12, teleports: 1, blinkPass: 1 },
+            moonGap: 45, giantUse: 0.25, pushUse: 0.12, teleports: 1, blinkPass: 1, bounces: 1, maxBounces: 3, bounceGap: 0.3, wraps: 1 },
     candidates: finale ? 8 : 1,
   };
 }

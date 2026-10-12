@@ -56,6 +56,7 @@
     flip(i) { tone(440 + i * 110, 0.09, "triangle", 0.16); },
     win() { [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.22, "sine", 0.16, k * 0.09)); },
     lost() { tone(140, 0.35, "sawtooth", 0.14, 0, -90); },
+    bounce() { tone(330, 0.08, "square", 0.08, 0, 120); },
   };
   // Haptics: Capacitor plugin inside the iOS shell, navigator.vibrate on the web.
   const CAP = window.Capacitor && window.Capacitor.Plugins;
@@ -73,6 +74,7 @@
   let levelIndex = 0, level = LEVELS[0];
   let s = P.make(level);
   let trail = [], ghost = [];
+  let bounceAt = -9;   // last rebound off a bouncy wall (makes bouncy walls flash)
   let acc = 0, last = 0, clock = 0;
   let lostAt = 0, wonAt = 0, winShown = false;
   let flash = 0;
@@ -395,6 +397,8 @@
     if (levelIndex === LEVELS.findIndex((l) => l.walls && l.walls.some((w) => w.blink))) return "Amber walls blink. Pass while they're open.";
     if (levelIndex === LEVELS.findIndex((l) => l.ordered)) return "Numbered rings: touch them in order.";
     if (levelIndex === LEVELS.findIndex((l) => l.goal.move)) return "The goal drifts now. Time your arrival.";
+    if (levelIndex === LEVELS.findIndex((l) => l.walls && l.walls.some((w) => w.bounce))) return "Green walls are springy: you bounce off them.";
+    if (levelIndex === LEVELS.findIndex((l) => l.wrap)) return "Open edges: fly off one side, come back on the other.";
     return null;
   }
   function setFooter() {
@@ -440,10 +444,12 @@
     if (flash > 0) flash = Math.max(0, flash - dt);
     if (s.status === "live") {
       acc += Math.min(dt, 0.1);
+      const b0 = s.bounces;
       while (acc >= P.DT && s.status === "live") {
         P.step(s, level); acc -= P.DT;
         trail.push({ x: s.x, y: s.y, a: s.active });
       }
+      if (s.bounces > b0) { if (clock - bounceAt > 0.15) { sfx.bounce(); buzz(10); } bounceAt = clock; }
       if (s.status === "lost") { lostAt = clock; sfx.lost(); buzz(40); setFooter(); }
       if (s.status === "won") { wonAt = clock; sfx.win(); buzz([20, 40, 20]); setFooter(); renderPips(); }
     } else if (s.status === "lost") {
@@ -515,9 +521,24 @@
         }
         continue;
       }
+      if (w.bounce) { // bouncy wall: springy green with a bright edge, flashes on a hit
+        const hit = Math.max(0, 1 - (clock - bounceAt) / 0.25);
+        ctx.fillStyle = "#1f7a5c"; ctx.shadowBlur = 8 + 14 * hit; ctx.shadowColor = "#5dffc0";
+        rr(w.x, w.y, w.w, w.h, 6); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.strokeStyle = "#5dffc0"; ctx.globalAlpha = 0.6 + 0.4 * hit; ctx.lineWidth = 2;
+        rr(w.x + 1, w.y + 1, w.w - 2, w.h - 2, 5); ctx.stroke(); ctx.globalAlpha = 1;
+        continue;
+      }
       // Tidal barrier look: rounded slab with a soft glow
       ctx.fillStyle = "#3a4080"; ctx.shadowBlur = 8; ctx.shadowColor = "#5a63c0";
       rr(w.x, w.y, w.w, w.h, 6); ctx.fill(); ctx.shadowBlur = 0;
+    }
+
+    // wrap levels: a drifting dashed border says the edges are open
+    if (level.wrap) {
+      ctx.strokeStyle = "#78c8ff"; ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
+      ctx.setLineDash([10, 10]); ctx.lineDashOffset = -clock * 20;
+      ctx.strokeRect(1, 1, W - 2, H - 2); ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
 
     // wormholes: both ends of a pair share a colour and spin
@@ -641,7 +662,13 @@
     if (s.status !== "won") {
       const c = s.status === "lost" ? "#ff4d4d" : COLS[s.active % 4];
       ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 22;
-      circle(s.x, s.y, P.ORB_R); ctx.fill(); ctx.shadowBlur = 0;
+      circle(s.x, s.y, P.ORB_R); ctx.fill();
+      if (level.wrap) { // the part poking past an edge shows on the opposite side
+        const R = P.ORB_R, ox = s.x < R ? W : s.x > W - R ? -W : 0, oy = s.y < R ? H : s.y > H - R ? -H : 0;
+        if (ox) { circle(s.x + ox, s.y, R); ctx.fill(); }
+        if (oy) { circle(s.x, s.y + oy, R); ctx.fill(); }
+      }
+      ctx.shadowBlur = 0;
       if (s.status === "idle") {
         ctx.strokeStyle = "rgba(238,240,255,0.35)"; ctx.lineWidth = 1;
         circle(s.x, s.y, P.ORB_R + 6 + 3 * Math.sin(clock * 5)); ctx.stroke();
