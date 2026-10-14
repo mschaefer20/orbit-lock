@@ -10,19 +10,29 @@
   const GOLD = "#ffd84d";
   const HOLE_COLS = ["#ff78ff", "#78ffe0"];
   const SAVE_KEY = "orbitlock.v1";
+  const CAP = window.Capacitor && window.Capacitor.Plugins;
+  const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   // ---- persistence -------------------------------------------------------
   // save.done[i] = 1 once level i is cleared (early saves kept stars; any star counts)
-  let save = { done: {} };
+  // localStorage is read synchronously at startup; inside the iOS shell the
+  // same JSON is mirrored to Capacitor Preferences (UserDefaults), which the
+  // OS never purges, and merged back in once it has loaded (see below).
+  let save = { done: {}, sound: 1 };
   try { save = Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}")); } catch (_) {}
   if (save.stars) { for (const k in save.stars) if (save.stars[k]) save.done[k] = 1; delete save.stars; persist(); }
-  function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) {} }
-  // Dev mode unlocks every level. Toggle: tap the map logo 7 times quickly
-  // (persists), or add ?all to the URL (this visit only).
+  function persist() {
+    const json = JSON.stringify(save);
+    try { localStorage.setItem(SAVE_KEY, json); } catch (_) {}
+    try { if (CAP && CAP.Preferences) CAP.Preferences.set({ key: SAVE_KEY, value: json }); } catch (_) {}
+  }
+  // Dev mode unlocks every level: tap the map logo 7 times quickly (persists),
+  // or add ?all to the URL (this visit only). Compiled out of store builds.
+  const DEV = false;
   const DEV_KEY = "orbitlock.dev";
   let devMode = false;
-  try { devMode = localStorage.getItem(DEV_KEY) === "1"; } catch (_) {}
-  let unlockAll = devMode || /[?&]all([=&]|$)/.test(location.search);
+  try { if (DEV) devMode = localStorage.getItem(DEV_KEY) === "1"; else localStorage.removeItem(DEV_KEY); } catch (_) {}
+  let unlockAll = devMode || (DEV && /[?&]all([=&]|$)/.test(location.search));
   function unlocked(i) { return unlockAll || i === 0 || !!save.done[i - 1]; }
 
   // ---- HiDPI ---------------------------------------------------------------
@@ -42,6 +52,7 @@
     return ac;
   }
   function tone(f, dur, type, vol, when = 0, slide = 0) {
+    if (!save.sound) return;
     const a = audio(); if (!a) return;
     const o = a.createOscillator(), g = a.createGain();
     o.type = type; o.frequency.setValueAtTime(f, a.currentTime + when);
@@ -59,8 +70,8 @@
     bounce() { tone(330, 0.08, "square", 0.08, 0, 120); },
   };
   // Haptics: Capacitor plugin inside the iOS shell, navigator.vibrate on the web.
-  const CAP = window.Capacitor && window.Capacitor.Plugins;
   function buzz(ms) {
+    if (!save.sound) return;
     try {
       if (CAP && CAP.Haptics) {
         const strong = Array.isArray(ms) || ms >= 40;
@@ -128,7 +139,11 @@
   function svgRoot(viewBox) {
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", viewBox);
-    const el = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
+    const el = (tag, attrs, parent) => {
+      const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]);
+      if (REDUCED_MOTION && tag.startsWith("animate")) return e;   // built but never attached: the map holds still
+      (parent || svg).appendChild(e); return e;
+    };
     const defs = el("defs", {});
     return { svg, el, defs };
   }
@@ -458,9 +473,12 @@
 
   function onWin() {
     if (!save.done[levelIndex]) { save.done[levelIndex] = 1; persist(); }
-    $("win-text").textContent = "Level " + (levelIndex + 1) + " cleared";
+    const last = levelIndex + 1 >= LEVELS.length;
+    $("win-text").textContent = last
+      ? "Level " + (levelIndex + 1) + " cleared. That's the end of the road, for now. Thank you for playing."
+      : "Level " + (levelIndex + 1) + " cleared";
     const nextBtn = screens.win.querySelector("[data-action=next]");
-    nextBtn.disabled = levelIndex + 1 >= LEVELS.length;
+    nextBtn.disabled = last; nextBtn.classList.toggle("hidden", last);
     showScreen("win");
   }
 
@@ -726,7 +744,7 @@
   $("btn-restart").addEventListener("click", () => { if (playing) reset(); });
   $("btn-levels").addEventListener("click", () => showScreen("levels"));
   let logoTaps = [];
-  document.querySelector(".map-head .logo").addEventListener("click", () => {
+  if (DEV) document.querySelector(".map-head .logo").addEventListener("click", () => {
     const now = Date.now();
     logoTaps = logoTaps.filter((t) => now - t < 2500); logoTaps.push(now);
     if (logoTaps.length < 7) return;
@@ -735,6 +753,18 @@
     try { devMode ? localStorage.setItem(DEV_KEY, "1") : localStorage.removeItem(DEV_KEY); } catch (_) {}
     buildLevelGrid();
   });
+  // sound + haptics toggle (one switch: the game is quiet or it isn't)
+  const soundBtn = $("btn-sound");
+  function renderSound() { soundBtn.classList.toggle("off", !save.sound); soundBtn.setAttribute("aria-label", save.sound ? "Sound on" : "Sound off"); }
+  soundBtn.addEventListener("click", () => { save.sound = save.sound ? 0 : 1; persist(); renderSound(); if (save.sound) { audio(); sfx.flip(1); buzz(12); } });
+  renderSound();
+  // merge progress from Preferences (survives WebView storage purges)
+  if (CAP && CAP.Preferences) CAP.Preferences.get({ key: SAVE_KEY }).then((r) => {
+    if (!r || !r.value) { persist(); return; }
+    const other = JSON.parse(r.value); let changed = false;
+    for (const k in other.done || {}) if (other.done[k] && !save.done[k]) { save.done[k] = 1; changed = true; }
+    if (changed) { persist(); if (current === "levels") buildLevelGrid(); }
+  }).catch(() => {});
   document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", () => {
     const a = b.dataset.action;
     if (a === "play") { loadLevel(frontierIndex()); showScreen(null); }
