@@ -1,5 +1,5 @@
 /* Offline cache. Bump CACHE on every change. */
-const CACHE = "orbitlock-v18";
+const CACHE = "orbitlock-v19";
 const ASSETS = ["./", "./index.html", "./style.css", "./physics.js", "./levels.js", "./game.js", "./manifest.json"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

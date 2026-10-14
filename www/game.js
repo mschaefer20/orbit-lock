@@ -105,7 +105,8 @@
   // Each chapter is its own SVG in global map coordinates (overflow visible);
   // chapters sit in ascending order so the next chapter's nodes cover the
   // road segment that leads into them. The far sky is one wrapping tile.
-  const J = { w: 360, step: 84, pad: 70, top: 170, amp: 92, chap: 20, total: 1, h: 1, tile: 1400 };
+  // step 130 units ~ 4-5 nodes per phone screen, so each one gets room to breathe.
+  const J = { w: 360, step: 130, pad: 110, top: 220, amp: 100, chap: 20, total: 1, h: 1, tile: 1400 };
   const svgNS = "http://www.w3.org/2000/svg";
   const map = { chunks: new Map(), frontier: 0, firstGate: -1, firstMover: -1, road: null, far: null };
   function nodePos(i) {
@@ -145,7 +146,7 @@
     host.appendChild(map.road);
     if (!map.far) buildFar();
     host.onscroll = syncMap;
-    host.scrollTop = Math.max(0, nodePos(map.frontier).y * scaleOf(host) - host.clientHeight * 0.58);
+    host.scrollTop = Math.max(0, nodePos(map.frontier).y * scaleOf(host) - host.clientHeight * 0.55);
     syncMap();
     let n = 0; for (const k in save.done) if (save.done[k]) n++;
     $("map-count").textContent = unlockAll ? "DEV · " + n : n + " / " + J.total;
@@ -214,9 +215,21 @@
     const tint = bandTint(c);
 
     // ---- near stars: some twinkle; a shooting star on a long loop -------------
-    for (let k = 0; k < J.chap * 2; k++) {
-      const st = el("circle", { cx: rnd() * J.w, cy: y0 + rnd() * (y1 - y0), r: 0.6 + rnd() * 1.2, fill: tint.star, opacity: 0.25 + rnd() * 0.5 });
+    for (let k = 0; k < J.chap * 3; k++) {
+      const st = el("circle", { cx: rnd() * J.w, cy: y0 + rnd() * (y1 - y0), r: 0.6 + rnd() * 1.3, fill: tint.star, opacity: 0.25 + rnd() * 0.5 });
       if (k % 5 === 0) el("animate", { attributeName: "opacity", values: "0.2;0.9;0.2", dur: (2 + rnd() * 4).toFixed(1) + "s", begin: (rnd() * 4).toFixed(1) + "s", repeatCount: "indefinite" }, st);
+    }
+    // dust motes drifting slowly upward, so the sky never sits completely still
+    for (let k = 0; k < 7; k++) {
+      const x = rnd() * J.w, y = y0 + rnd() * (y1 - y0), dur = (9 + rnd() * 9).toFixed(1) + "s", begin = (-rnd() * 12).toFixed(1) + "s";
+      const m = el("circle", { cx: x, cy: y, r: 1.2 + rnd() * 1.4, fill: tint.star, opacity: 0 });
+      el("animate", { attributeName: "cy", from: y + 40, to: y - 40, dur, begin, repeatCount: "indefinite" }, m);
+      el("animate", { attributeName: "opacity", values: "0;0.45;0.45;0", keyTimes: "0;0.2;0.8;1", dur, begin, repeatCount: "indefinite" }, m);
+    }
+    // a soft nebula wash behind each chapter, in the chapter's own colour
+    {
+      const col = COLS[c % 4], cx = (c % 2 ? 0.3 : 0.7) * J.w, cy = (y0 + y1) / 2 + ri(-200, 200);
+      el("ellipse", { cx, cy, rx: 140, ry: 360, fill: radial(col, [["0%", 0.07], ["100%", 0]]), transform: "rotate(" + ri(-25, 25) + " " + cx + " " + cy + ")" });
     }
     {
       const y = y0 + 100 + rnd() * Math.max(0, y1 - y0 - 200), len = 70;
@@ -231,6 +244,7 @@
     // ---- scenery beside the road ----------------------------------------------
     const planet = (x, y, r, col, on, kind) => {
       const g = el("g", { opacity: on ? 0.9 : 0.32 });
+      el("circle", { cx: x, cy: y, r: r * 2.2, fill: radial(col, [["0%", 0.22], ["100%", 0]]) }, g);   // atmosphere glow
       if (kind === "ringed") el("ellipse", { cx: x, cy: y, rx: r * 2.1, ry: r * 0.55, fill: "none", stroke: col, "stroke-width": 1.2, opacity: 0.55, transform: "rotate(-20 " + x + " " + y + ")" }, g);
       el("circle", { cx: x, cy: y, r, fill: radial(col, [["0%", 1], ["72%", 1], ["100%", 0.12]]) }, g);
       if (kind === "ringed") el("path", { d: "M" + (x - r * 2.1) + " " + y + " A" + (r * 2.1) + " " + (r * 0.55) + " 0 0 0 " + (x + r * 2.1) + " " + y, fill: "none", stroke: col, "stroke-width": 1.4, opacity: 0.9, transform: "rotate(-20 " + x + " " + y + ")" }, g);
@@ -247,8 +261,8 @@
       if (i % 2 !== 1) continue;
       const lv = LEVELS[i], p = nodePos(i), side = p.x > J.w / 2 ? 1 : -1;
       const col = COLS[(i * 7 + lv.planets.length) % 4];
-      const r = 5 + (lv.planets[0].r / 54) * 8;
-      const x = Math.max(16, Math.min(J.w - 16, p.x + side * (44 + ri(0, 40)))), y = p.y + 28 + ri(0, 30);
+      const r = 8 + (lv.planets[0].r / 54) * 13;
+      const x = Math.max(22, Math.min(J.w - 22, p.x + side * (62 + ri(0, 50)))), y = p.y + 40 + ri(0, 50);
       planet(x, y, r, col, reached(i), KINDS[(i >> 1) % KINDS.length]);
     }
     // asteroid belts: a scatter of grey rocks crossing the road on a slant
@@ -257,10 +271,10 @@
       const p = nodePos(b), on = reached(b);
       const g = el("g", { opacity: on ? 0.7 : 0.3 });
       for (let k = 0; k < 34; k++) {
-        const t = (k / 34) - 0.5, x = J.w / 2 + t * J.w * 1.1 + ri(-10, 10), y = p.y + t * 70 + ri(-22, 22);
-        const near = Math.hypot(x - p.x, y - p.y) < 34 || Math.hypot(x - nodePos(b + 1).x, y - nodePos(b + 1).y) < 34;
+        const t = (k / 34) - 0.5, x = J.w / 2 + t * J.w * 1.1 + ri(-14, 14), y = p.y + t * 100 + ri(-34, 34);
+        const near = Math.hypot(x - p.x, y - p.y) < 44 || Math.hypot(x - nodePos(b + 1).x, y - nodePos(b + 1).y) < 44;
         if (near) continue;
-        el("circle", { cx: x, cy: y, r: 1 + rnd() * 2.4, fill: "#8a8fb5", opacity: 0.35 + rnd() * 0.5 }, g);
+        el("circle", { cx: x, cy: y, r: 1.4 + rnd() * 3.2, fill: "#8a8fb5", opacity: 0.35 + rnd() * 0.5 }, g);
       }
     }
     // set pieces that come round every five chapters: a wormhole pair, a satellite
@@ -318,24 +332,34 @@
       },
     ];
     const cleared = (i) => !!save.done[i] || unlockAll;
-    if (hi === lo + J.chap - 1) {
-      const p = nodePos(hi), draw = LANDMARKS[c % LANDMARKS.length];
-      if (lastChap) draw(J.w / 2, p.y - 80, cleared(hi));
-      else { const side = p.x > J.w / 2 ? -1 : 1; draw(Math.max(70, Math.min(J.w - 70, p.x + side * 120)), p.y - 42, cleared(hi)); }
-    } else LANDMARKS[4](J.w / 2, nodePos(hi).y - 80, cleared(hi));
+    {   // landmarks are drawn 1.3x: the map is zoomed in, so they can be grand
+      const n0 = svg.childNodes.length, p = nodePos(hi);
+      let lx, ly;
+      if (hi === lo + J.chap - 1) {
+        const draw = LANDMARKS[c % LANDMARKS.length];
+        if (lastChap) { lx = J.w / 2; ly = p.y - 100; }
+        else { const side = p.x > J.w / 2 ? -1 : 1; lx = Math.max(85, Math.min(J.w - 85, p.x + side * 125)); ly = p.y - 55; }
+        draw(lx, ly, cleared(hi));
+      } else { lx = J.w / 2; ly = p.y - 100; LANDMARKS[4](lx, ly, cleared(hi)); }
+      const g = el("g", { transform: "translate(" + lx + " " + ly + ") scale(1.3) translate(" + (-lx) + " " + (-ly) + ")" });
+      while (svg.childNodes.length > n0 + 1) g.appendChild(svg.childNodes[n0]);
+    }
 
     // ---- road: faint ahead, lit and flowing behind you ---------------------------
     // this chapter owns the segment up into the next chapter's first node
     const top = Math.min(total - 1, hi + 1);
-    el("path", { d: roadPath(lo, top), fill: "none", stroke: "#2a2f5a", "stroke-width": 3, "stroke-linecap": "round" });
+    el("path", { d: roadPath(lo, top), fill: "none", stroke: "#2a2f5a", "stroke-width": 12, "stroke-linecap": "round", opacity: 0.22 });
+    el("path", { d: roadPath(lo, top), fill: "none", stroke: "#2a2f5a", "stroke-width": 3.5, "stroke-linecap": "round" });
+    el("path", { d: roadPath(lo, top), fill: "none", stroke: "#4a5190", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-dasharray": "1 10", opacity: 0.5 });
     if (lo < frontier) {
       const litTo = Math.min(top, frontier);
       const lg = el("linearGradient", { id: gid(), gradientUnits: "userSpaceOnUse", x1: 0, y1: nodePos(0).y, x2: 0, y2: nodePos(frontier).y }, defs);
       el("stop", { offset: "0%", "stop-color": COLS[0] }, lg);
       el("stop", { offset: "100%", "stop-color": COLS[1] }, lg);
-      el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "url(#" + lg.id + ")", "stroke-width": 3, "stroke-linecap": "round", opacity: 0.85 });
-      const flow = el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "#fff", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-dasharray": "2 14", opacity: 0.55 });
-      el("animate", { attributeName: "stroke-dashoffset", from: 64, to: 0, dur: "2.4s", repeatCount: "indefinite" }, flow);
+      el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "url(#" + lg.id + ")", "stroke-width": 14, "stroke-linecap": "round", opacity: 0.18 });
+      el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "url(#" + lg.id + ")", "stroke-width": 4, "stroke-linecap": "round", opacity: 0.9 });
+      const flow = el("path", { d: roadPath(lo, litTo), fill: "none", stroke: "#fff", "stroke-width": 1.6, "stroke-linecap": "round", "stroke-dasharray": "3 20", opacity: 0.6 });
+      el("animate", { attributeName: "stroke-dashoffset", from: 92, to: 0, dur: "2.4s", repeatCount: "indefinite" }, flow);
     }
 
     // ---- nodes -----------------------------------------------------------------
@@ -344,30 +368,32 @@
       const g = el("g", { class: "node" + (open ? "" : " locked"), transform: "translate(" + p.x + " " + p.y + ")" });
       const hasNew = i === map.firstGate || i === map.firstMover;
       const big = i + 1 >= 1000;   // four-digit numbers need a smaller font
-      el("circle", { r: 20, fill: tint.bg }, g);
-      if (done) {
-        el("circle", { r: 16, fill: COLS[1], opacity: 0.18 }, g);
-        el("circle", { r: 16, fill: "none", stroke: COLS[1], "stroke-width": 2 }, g);
-      } else if (isCur) {
-        el("circle", { r: 16, fill: GOLD, opacity: 0.15 }, g);
-        el("circle", { r: 16, fill: "none", stroke: GOLD, "stroke-width": 2.5 }, g);
-        const halo = el("circle", { r: 22, fill: "none", stroke: GOLD, "stroke-width": 1.5, opacity: 0.6 }, g);
-        el("animate", { attributeName: "r", values: "20;27;20", dur: "2.2s", repeatCount: "indefinite" }, halo);
-        el("animate", { attributeName: "opacity", values: "0.6;0;0.6", dur: "2.2s", repeatCount: "indefinite" }, halo);
-        // your orb, waiting above the node
+      if (done || isCur) el("circle", { r: 44, fill: radial(done ? COLS[1] : GOLD, [["0%", 0.28], ["100%", 0]]) }, g);
+      el("circle", { r: 26, fill: tint.bg }, g);
+      if (done) {   // a cleared level: a locked orbit, the orb resting in its ring
+        el("circle", { r: 21, fill: COLS[1], opacity: 0.16 }, g);
+        el("circle", { r: 21, fill: "none", stroke: COLS[1], "stroke-width": 2.5 }, g);
+        el("circle", { r: 25, fill: "none", stroke: COLS[1], "stroke-width": 0.8, opacity: 0.4, "stroke-dasharray": "2 5" }, g);
+      } else if (isCur) {   // where you are: a gold ring with your orb circling it
+        el("circle", { r: 21, fill: GOLD, opacity: 0.16 }, g);
+        el("circle", { r: 21, fill: "none", stroke: GOLD, "stroke-width": 3 }, g);
+        const halo = el("circle", { r: 28, fill: "none", stroke: GOLD, "stroke-width": 1.5, opacity: 0.6 }, g);
+        el("animate", { attributeName: "r", values: "26;38;26", dur: "2.4s", repeatCount: "indefinite" }, halo);
+        el("animate", { attributeName: "opacity", values: "0.6;0;0.6", dur: "2.4s", repeatCount: "indefinite" }, halo);
+        el("circle", { r: 33, fill: "none", stroke: COLS[1], "stroke-width": 1, opacity: 0.35, "stroke-dasharray": "3 6" }, g);
         const orb = el("g", {}, g);
-        el("circle", { cx: 0, cy: -30, r: 10, fill: COLS[1], opacity: 0.25 }, orb);
-        el("circle", { cx: 0, cy: -30, r: 6, fill: COLS[1] }, orb);
-        el("animateTransform", { attributeName: "transform", type: "translate", values: "0 0;0 -4;0 0", dur: "1.8s", repeatCount: "indefinite" }, orb);
-        el("text", { y: 38, "text-anchor": "middle", "font-size": 9, fill: GOLD, "letter-spacing": 2, opacity: 0.8 }, g).textContent = "TAP TO PLAY";
+        el("circle", { cx: 0, cy: -33, r: 11, fill: COLS[1], opacity: 0.25 }, orb);
+        el("circle", { cx: 0, cy: -33, r: 6.5, fill: COLS[1] }, orb);
+        el("animateTransform", { attributeName: "transform", type: "rotate", from: "0 0 0", to: "360 0 0", dur: "5s", repeatCount: "indefinite" }, orb);
+        el("text", { y: 56, "text-anchor": "middle", "font-size": 10, fill: GOLD, "letter-spacing": 2.5, opacity: 0.85 }, g).textContent = "TAP TO PLAY";
       } else {
-        el("circle", { r: open ? 14 : 10, fill: "#0b0e22", stroke: "#2a2f5a", "stroke-width": 1.5 }, g);
-        if (!open) el("text", { y: big ? 2.5 : 3.5, "text-anchor": "middle", "font-size": big ? 6.5 : 9, fill: "#3a4080" }, g).textContent = i + 1;
+        el("circle", { r: open ? 18 : 13, fill: "#0b0e22", stroke: "#2a2f5a", "stroke-width": 1.8 }, g);
+        if (!open) el("text", { y: big ? 3 : 4, "text-anchor": "middle", "font-size": big ? 8 : 11, fill: "#3a4080" }, g).textContent = i + 1;
       }
       if (open) {
-        el("text", { y: big ? 4 : 5, "text-anchor": "middle", "font-size": big ? 10.5 : 13, "font-weight": 700, fill: done ? "#eef0ff" : isCur ? GOLD : "#7d82ad" }, g).textContent = i + 1;
+        el("text", { y: big ? 5 : 6, "text-anchor": "middle", "font-size": big ? 13 : 17, "font-weight": 700, fill: done ? "#eef0ff" : isCur ? GOLD : "#7d82ad" }, g).textContent = i + 1;
         const side = p.x > J.w / 2 ? -1 : 1;
-        if (hasNew && !done) el("text", { x: side * 30, y: 4, "text-anchor": side < 0 ? "end" : "start", "font-size": 9, fill: GOLD, "letter-spacing": 1 }, g).textContent = "SOMETHING NEW";
+        if (hasNew && !done) el("text", { x: side * 38, y: 4, "text-anchor": side < 0 ? "end" : "start", "font-size": 10, fill: GOLD, "letter-spacing": 1.5 }, g).textContent = "SOMETHING NEW";
         g.addEventListener("click", () => { loadLevel(i); showScreen(null); });
       }
     }

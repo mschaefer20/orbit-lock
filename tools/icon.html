@@ -1,0 +1,83 @@
+<!doctype html>
+<!-- App icon / splash scene, drawn with the game's look (see www/game.js).
+     Rendered by tools/make-assets.js in headless Edge/Chrome:
+       ?size=1024            icon, scene fills the square
+       ?size=2732&inner=1100 splash, scene centred on a dark canvas -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#05060f;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas><script>
+const q = new URLSearchParams(location.search);
+const SIZE = +q.get("size") || 1024, INNER = +q.get("inner") || SIZE;
+const cv = document.getElementById("c"); cv.width = cv.height = SIZE;
+const ctx = cv.getContext("2d");
+ctx.fillStyle = "#05060f"; ctx.fillRect(0, 0, SIZE, SIZE);
+const off = (SIZE - INNER) / 2;
+ctx.translate(off, off); ctx.scale(INNER / 420, INNER / 420);   // scene in game units, 420 x 420
+const W = 420;
+const PINK = "#ff5e7e", CYAN = "#4dd2ff", PURPLE = "#b48cff", GOLD = "#ffd84d", BG = "#05060f";
+const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); };
+
+// stars, seeded so the icon is stable
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (let i = 0; i < 90; i++) {
+  const x = rnd() * W, y = rnd() * W, r = 0.4 + rnd() * 1.1;
+  ctx.globalAlpha = 0.25 + rnd() * 0.6; ctx.fillStyle = "#c9d1ff"; circle(x, y, r); ctx.fill();
+}
+ctx.globalAlpha = 1;
+
+// planet: Tidal-style core fading out, hairline ring at the fatal radius
+function planet(x, y, r, c, active) {
+  const R = r * 1.12, g = ctx.createRadialGradient(x, y, r * 0.2, x, y, R);
+  g.addColorStop(0, c); g.addColorStop(0.7, c); g.addColorStop(1, "rgba(5,6,15,0.1)");
+  ctx.globalAlpha = active ? 0.95 : 0.4; ctx.fillStyle = g; circle(x, y, R); ctx.fill();
+  ctx.globalAlpha = active ? 0.5 : 0.22; ctx.strokeStyle = c; ctx.lineWidth = 2; circle(x, y, r); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// the moment: the orb has just flipped from the cyan planet to the pink one
+// and is swinging down into the gold ring.
+const P1 = { x: 112, y: 322, r: 74 };   // pink, active (big, lower left)
+const P2 = { x: 318, y: 92, r: 50 };    // cyan, idle; the next tap goes back to it
+const GO = { x: 306, y: 300, r: 46 };   // goal ring
+const ORB = { x: 286, y: 262 };
+
+// heavy-planet rings drifting inward on the active planet
+planet(P1.x, P1.y, P1.r, PINK, true);
+ctx.strokeStyle = PINK; ctx.lineWidth = 1.5;
+ctx.lineWidth = 2.5;
+for (const [rr, a] of [[P1.r + 10, 0.5], [P1.r + 22, 0.25]]) { ctx.globalAlpha = a; circle(P1.x, P1.y, rr); ctx.stroke(); }
+ctx.globalAlpha = 1;
+
+planet(P2.x, P2.y, P2.r, CYAN, false);
+// "next" marker: dashed ring around the planet the next tap switches to
+ctx.strokeStyle = CYAN; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5; ctx.lineWidth = 2.5; ctx.setLineDash([7, 9]);
+circle(P2.x, P2.y, P2.r + 8); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+// a small purple planet peeking in top-left for depth
+planet(52, 70, 26, PURPLE, false);
+
+// trail: cyan while it orbited the cyan planet, pink since the flip
+ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+function trail(pts, c) { ctx.strokeStyle = c; ctx.globalAlpha = 0.8; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.globalAlpha = 1; }
+const cyanArc = []; // swung round the cyan planet from the top-left
+for (let i = 0; i <= 40; i++) { const t = Math.PI * 1.05 + i / 40 * Math.PI * 0.95; cyanArc.push({ x: P2.x + Math.cos(t) * 88, y: P2.y + Math.sin(t) * 88 }); }
+const flip = cyanArc[cyanArc.length - 1];               // where the tap happened
+const pinkArc = [flip];                                   // then pulled down toward pink, curving into the ring
+for (let i = 1; i <= 30; i++) { const k = i / 30; pinkArc.push({ x: flip.x + (ORB.x - flip.x) * k + Math.sin(k * Math.PI) * 26, y: flip.y + (ORB.y - flip.y) * k - Math.sin(k * Math.PI) * 10 }); }
+trail(cyanArc, CYAN); trail(pinkArc, PINK);
+// flip spark
+ctx.fillStyle = "#fff"; ctx.globalAlpha = 0.9; circle(flip.x, flip.y, 5); ctx.fill(); ctx.globalAlpha = 1;
+
+// goal ring with its pulse glow
+ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.shadowColor = GOLD; ctx.shadowBlur = 24;
+circle(GO.x, GO.y, GO.r - 2); ctx.stroke(); ctx.shadowBlur = 0;
+ctx.globalAlpha = 0.18; ctx.fillStyle = GOLD; circle(GO.x, GO.y, GO.r - 2); ctx.fill(); ctx.globalAlpha = 1;
+
+// pull beam from the orb to the active planet
+ctx.strokeStyle = PINK; ctx.globalAlpha = 0.3; ctx.lineWidth = 3;
+ctx.beginPath(); ctx.moveTo(ORB.x, ORB.y); ctx.lineTo(P1.x, P1.y); ctx.stroke(); ctx.globalAlpha = 1;
+
+// orb: flat fill + glow, coloured by the active pull
+ctx.fillStyle = PINK; ctx.shadowColor = PINK; ctx.shadowBlur = 30;
+circle(ORB.x, ORB.y, 17); ctx.fill(); ctx.shadowBlur = 0;
+document.title = "done";
+</script></body></html>

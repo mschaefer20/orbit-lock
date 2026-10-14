@@ -30,7 +30,7 @@ Tap / click / Space = launch, then switch pull. R = restart.
 - `sw.js`, `manifest.json` — installable PWA (bump `CACHE` in sw.js on changes)
 
 Repo root: `package.json`, `capacitor.config.json`, `codemagic.yaml`, `ci/`
-(CI patch scripts), `resources/` (icon + splash from `tools/make-assets.js`),
+(CI patch scripts), `resources/` (icon + splash rendered from `tools/icon.html` by `tools/make-assets.js`, needs headless Edge/Chrome),
 `docs/` (privacy + support pages for GitHub Pages), `BUILD-iOS.md`,
 `STORE-LISTING.md`.
 
