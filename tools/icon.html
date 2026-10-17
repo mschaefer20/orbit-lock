@@ -23,6 +23,9 @@ for (let i = 0; i < 90; i++) {
   ctx.globalAlpha = 0.25 + rnd() * 0.6; ctx.fillStyle = "#c9d1ff"; circle(x, y, r); ctx.fill();
 }
 ctx.globalAlpha = 1;
+// ?shrink=0.9 pulls the scene in from the edges (the stars still fill the
+// square) so nothing sits against the rounded icon mask
+const K = +q.get("shrink") || 1; ctx.translate(W / 2, W / 2); ctx.scale(K, K); ctx.translate(-W / 2, -W / 2);
 
 // planet: Tidal-style core fading out, hairline ring at the fatal radius
 function planet(x, y, r, c, active) {

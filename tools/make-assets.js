@@ -32,7 +32,7 @@ const hpage = "file:///" + path.join(__dirname, "header.html").replace(/\\/g, "/
 execFileSync(browser, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--window-size=5244,2950",
   "--screenshot=" + path.join(creative, "header-16x9.png"), hpage + "?w=5244&h=2950"], { stdio: "ignore" });
 console.log("wrote store/creative/header-16x9.png 5244x2950");
-shot(path.join(dir, "icon.png"), 1024, "");
+shot(path.join(dir, "icon.png"), 1024, "&shrink=0.88");
 shot(path.join(dir, "splash.png"), 2732, "&inner=1100");
 fs.copyFileSync(path.join(dir, "splash.png"), path.join(dir, "splash-dark.png"));
 console.log("wrote resources/splash-dark.png");
