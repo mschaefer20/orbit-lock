@@ -43,19 +43,24 @@ git push -u origin main
    TestFlight app. **Play it on the phone before submitting.**
 
 ## 4. Publish the privacy page
-App Store review needs a privacy URL. `docs/` has one ready:
-GitHub repo → Settings → Pages → Source: `main`, folder `/docs`. The URL
-becomes `https://mschaefer20.github.io/orbit-lock/privacy.html` and support
-is `https://mschaefer20.github.io/orbit-lock/`.
+App Store review needs a privacy URL. `docs/` has one ready, but GitHub
+Pages only serves **public** repos on a free account (`tidal` is public,
+`orbit-lock` is private). Either make the repo public (Settings → General →
+Danger Zone → Change visibility; nothing secret is committed) or copy
+`docs/` into `tidal/docs/orbit-lock/` and adjust the URLs. Then: repo →
+Settings → Pages → Source: Deploy from a branch, `main`, folder `/docs`.
+The URL becomes `https://mschaefer20.github.io/orbit-lock/privacy.html` and
+support is `https://mschaefer20.github.io/orbit-lock/`. Check both load
+(first deploy takes a few minutes) before pasting them into Connect.
 
 ## 5. Fill in the App Store page
 Text to paste is in `STORE-LISTING.md`.
 - Category **Games** → Puzzle. Secondary: Casual.
 - **Age rating** questionnaire: all "None" → 4+.
-- **App Privacy**: Data Not Collected (the app stores stars locally only).
-- **Screenshots**: 6.7" (1290×2796) required, 6.5" optional. Take them from
-  the TestFlight build on your phone (level 1, a mid-level with gates, a
-  late level with drifting planets, the level grid). At least 3.
+- **App Privacy**: Data Not Collected (progress is stored on the device only).
+- **Screenshots**: ready in `store/screenshots/` (6.9" 1320×2868 required,
+  6.5" 1284×2778 for older phones). Upload 1-5 in order. Regenerate with
+  `node tools/screenshots.js` if the art changes.
 - Export compliance is already answered in the build (no custom encryption).
 - Attach the TestFlight build, Add for Review, Submit.
 

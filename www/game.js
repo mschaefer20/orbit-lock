@@ -480,6 +480,21 @@
     const nextBtn = screens.win.querySelector("[data-action=next]");
     nextBtn.disabled = last; nextBtn.classList.toggle("hidden", last);
     showScreen("win");
+    maybeAskForReview();
+  }
+
+  // Rate-the-app: native StoreKit prompt (iOS decides whether it actually shows,
+  // max 3 per year). Ask once per milestone, only right after a win, when the
+  // player has just finished a chapter and is feeling good about the game.
+  const REVIEW_AT = [20, 60, 150];   // levels cleared
+  function maybeAskForReview() {
+    if (!(CAP && CAP.InAppReview)) return;
+    let cleared = 0; for (const k in save.done) if (save.done[k]) cleared++;
+    const asked = save.rated || 0;
+    const m = REVIEW_AT.find((n) => n > asked && cleared >= n);
+    if (!m) return;
+    save.rated = m; persist();
+    setTimeout(() => { try { CAP.InAppReview.requestReview(); } catch (_) {} }, 900);
   }
 
   // ---- update --------------------------------------------------------------
@@ -763,6 +778,7 @@
     if (!r || !r.value) { persist(); return; }
     const other = JSON.parse(r.value); let changed = false;
     for (const k in other.done || {}) if (other.done[k] && !save.done[k]) { save.done[k] = 1; changed = true; }
+    if ((other.rated || 0) > (save.rated || 0)) { save.rated = other.rated; changed = true; }   // don't re-ask for a rating
     if (changed) { persist(); if (current === "levels") buildLevelGrid(); }
   }).catch(() => {});
   document.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", () => {
