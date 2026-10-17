@@ -49,9 +49,13 @@ From the maker of Tidal Orbit.
 `First release. 500 levels.`
 
 ## Screenshots
-`store/screenshots/` — five per size, 6.9" (1320x2868) and 6.5" (1284x2778),
-regenerated with `node tools/screenshots.js` (poses real levels mid-flight
-with the solver's taps, adds a caption, crops to size). Upload in order 1-5.
+`store/screenshots/` — five per size, regenerated with
+`node tools/screenshots.js` (poses real levels mid-flight with the solver's
+taps, adds a caption, crops to size). Upload in order 1-5, one size per row
+in Connect's Media Manager (each row only accepts its own dimensions):
+- `6.9-*.png` (1320x2868) -> row **iPhone with Dynamic Island (large display)**. Required.
+- `6.5-*.png` (1284x2778) -> row **iPhone with Face ID (large display)**. Optional;
+  Connect scales the Dynamic Island set for every other iPhone if left empty.
 
 ## Connect checklist
 - Category: Games > Puzzle (secondary: Casual)
