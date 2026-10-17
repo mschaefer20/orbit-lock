@@ -1,0 +1,88 @@
+<!doctype html>
+<!-- App Store "creative asset": one 16:9 PNG (5244 x 2950) that App Store
+     Connect accepts for both the product-page header (shown cropped to 21:9)
+     and the search-results card (cropped to 3:2). Everything that matters sits
+     inside the intersection of those crops. Same scene and palette as
+     icon.html. Rendered by tools/make-assets.js:  ?w=5244&h=2950 -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#05060f;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas><script>
+const q = new URLSearchParams(location.search);
+const OW = +q.get("w") || 5244, OH = +q.get("h") || 2950;
+const cv = document.getElementById("c"); cv.width = OW; cv.height = OH;
+const ctx = cv.getContext("2d");
+ctx.fillStyle = "#05060f"; ctx.fillRect(0, 0, OW, OH);
+// design space 1600 x 900; safe zone (survives both crops) is x 125..1475, y 107..793
+const S = OW / 1600; ctx.scale(S, S);
+const W = 1600, H = 900;
+const PINK = "#ff5e7e", CYAN = "#4dd2ff", PURPLE = "#b48cff", GOLD = "#ffd84d";
+const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); };
+if (q.get("guides")) { ctx.strokeStyle = "#f00"; ctx.lineWidth = 2; ctx.strokeRect(125, 107, 1350, 686); }
+
+// ---- far sky: two faint nebulae and seeded stars ----------------------------
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (const [x, y, r, c] of [[300, 650, 420, "rgba(180,140,255,0.10)"], [1250, 250, 380, "rgba(77,210,255,0.08)"], [1450, 760, 300, "rgba(255,94,126,0.07)"]]) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, c); g.addColorStop(1, "rgba(5,6,15,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+for (let i = 0; i < 420; i++) {
+  const x = rnd() * W, y = rnd() * H, r = 0.5 + rnd() * 1.6;
+  ctx.globalAlpha = 0.2 + rnd() * 0.65; ctx.fillStyle = "#c9d1ff"; circle(x, y, r); ctx.fill();
+}
+ctx.globalAlpha = 1;
+
+// ---- the gameplay moment (icon.html's scene), right of centre -----------------
+function planet(x, y, r, c, active) {
+  const R = r * 1.12, g = ctx.createRadialGradient(x, y, r * 0.2, x, y, R);
+  g.addColorStop(0, c); g.addColorStop(0.7, c); g.addColorStop(1, "rgba(5,6,15,0.1)");
+  ctx.globalAlpha = active ? 0.95 : 0.4; ctx.fillStyle = g; circle(x, y, R); ctx.fill();
+  ctx.globalAlpha = active ? 0.5 : 0.22; ctx.strokeStyle = c; ctx.lineWidth = 2; circle(x, y, r); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+ctx.save();
+ctx.translate(850, 135); ctx.scale(1.45, 1.45);   // 420-unit scene -> x 850..1459, y 135..744 (inside the safe zone)
+const P1 = { x: 112, y: 322, r: 74 }, P2 = { x: 318, y: 92, r: 50 }, GO = { x: 306, y: 300, r: 46 }, ORB = { x: 286, y: 262 };
+planet(P1.x, P1.y, P1.r, PINK, true);
+ctx.strokeStyle = PINK; ctx.lineWidth = 2.5;
+for (const [rr, a] of [[P1.r + 10, 0.5], [P1.r + 22, 0.25]]) { ctx.globalAlpha = a; circle(P1.x, P1.y, rr); ctx.stroke(); }
+ctx.globalAlpha = 1;
+planet(P2.x, P2.y, P2.r, CYAN, false);
+ctx.strokeStyle = CYAN; ctx.globalAlpha = 0.45; ctx.lineWidth = 2.5; ctx.setLineDash([7, 9]);
+circle(P2.x, P2.y, P2.r + 8); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+planet(40, 60, 26, PURPLE, false);
+ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+function trail(pts, c) { ctx.strokeStyle = c; ctx.globalAlpha = 0.8; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.globalAlpha = 1; }
+const cyanArc = [];
+for (let i = 0; i <= 40; i++) { const t = Math.PI * 1.05 + i / 40 * Math.PI * 0.95; cyanArc.push({ x: P2.x + Math.cos(t) * 88, y: P2.y + Math.sin(t) * 88 }); }
+const flip = cyanArc[cyanArc.length - 1], pinkArc = [flip];
+for (let i = 1; i <= 30; i++) { const k = i / 30; pinkArc.push({ x: flip.x + (ORB.x - flip.x) * k + Math.sin(k * Math.PI) * 26, y: flip.y + (ORB.y - flip.y) * k - Math.sin(k * Math.PI) * 10 }); }
+trail(cyanArc, CYAN); trail(pinkArc, PINK);
+ctx.fillStyle = "#fff"; ctx.globalAlpha = 0.9; circle(flip.x, flip.y, 5); ctx.fill(); ctx.globalAlpha = 1;
+ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.shadowColor = GOLD; ctx.shadowBlur = 24;
+circle(GO.x, GO.y, GO.r - 2); ctx.stroke(); ctx.shadowBlur = 0;
+ctx.globalAlpha = 0.18; ctx.fillStyle = GOLD; circle(GO.x, GO.y, GO.r - 2); ctx.fill(); ctx.globalAlpha = 1;
+ctx.strokeStyle = PINK; ctx.globalAlpha = 0.3; ctx.lineWidth = 3;
+ctx.beginPath(); ctx.moveTo(ORB.x, ORB.y); ctx.lineTo(P1.x, P1.y); ctx.stroke(); ctx.globalAlpha = 1;
+ctx.fillStyle = PINK; ctx.shadowColor = PINK; ctx.shadowBlur = 30;
+circle(ORB.x, ORB.y, 17); ctx.fill(); ctx.shadowBlur = 0;
+ctx.restore();
+
+// ---- wordmark + tagline, left of centre --------------------------------------
+const FONT = '"Segoe UI", system-ui, -apple-system, sans-serif';
+const X0 = 150, MAXW = 760;
+// fit "ORBIT LOCK" with the game's letter-spacing into MAXW
+let size = 120, spacing = 0.16;
+const measure = (s) => { ctx.font = `800 ${s}px ${FONT}`; return [..."ORBIT LOCK"].reduce((w, ch) => w + ctx.measureText(ch).width + s * spacing, 0) - s * spacing; };
+while (measure(size) > MAXW) size -= 2;
+const logoW = measure(size), logoY = 430;
+const grad = ctx.createLinearGradient(X0, 0, X0 + logoW, 0);
+grad.addColorStop(0, PINK); grad.addColorStop(0.5, PURPLE); grad.addColorStop(1, CYAN);
+ctx.font = `800 ${size}px ${FONT}`; ctx.textBaseline = "alphabetic"; ctx.fillStyle = grad;
+ctx.shadowColor = "rgba(180,140,255,0.35)"; ctx.shadowBlur = 40;
+let x = X0; for (const ch of "ORBIT LOCK") { ctx.fillText(ch, x, logoY); x += ctx.measureText(ch).width + size * spacing; }
+ctx.shadowBlur = 0;
+ctx.font = `600 54px ${FONT}`; ctx.fillStyle = "#eef0ff"; ctx.globalAlpha = 0.92;
+ctx.fillText("One button. Every planet.", X0 + 4, logoY + 92);
+ctx.font = `500 34px ${FONT}`; ctx.fillStyle = "#9aa0cc"; ctx.globalAlpha = 1;
+ctx.fillText("500 gravity puzzles. Works offline.", X0 + 5, logoY + 150);
+document.title = "done";
+</script></body></html>

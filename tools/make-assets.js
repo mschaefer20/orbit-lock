@@ -25,6 +25,13 @@ function shot(out, size, query) {
     "--screenshot=" + out, page + "?size=" + size + query], { stdio: "ignore" });
   console.log("wrote", path.relative(process.cwd(), out));
 }
+// App Store creative asset (optional): one 16:9 PNG Connect accepts for both the
+// product-page header (cropped to 21:9) and the search-results card (3:2).
+const creative = path.join(__dirname, "..", "store", "creative"); fs.mkdirSync(creative, { recursive: true });
+const hpage = "file:///" + path.join(__dirname, "header.html").replace(/\\/g, "/");
+execFileSync(browser, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--window-size=5244,2950",
+  "--screenshot=" + path.join(creative, "header-16x9.png"), hpage + "?w=5244&h=2950"], { stdio: "ignore" });
+console.log("wrote store/creative/header-16x9.png 5244x2950");
 shot(path.join(dir, "icon.png"), 1024, "");
 shot(path.join(dir, "splash.png"), 2732, "&inner=1100");
 fs.copyFileSync(path.join(dir, "splash.png"), path.join(dir, "splash-dark.png"));

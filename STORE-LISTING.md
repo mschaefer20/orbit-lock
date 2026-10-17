@@ -59,6 +59,14 @@ in Connect's Media Manager (each row only accepts its own dimensions):
 Rows left empty get scaled copies of what you did upload. `jpg/` holds the
 same images as JPEG in case the uploader rejects a PNG.
 
+## Header & search-results media (optional, iOS 27+)
+`store/creative/header-16x9.png` (5244x2950, rendered from `tools/header.html`
+by `node tools/make-assets.js`). One file serves both slots: upload it as the
+**Header** asset, then tick the option to reuse it for **Search Results** (or
+upload the same file there). Connect crops it to 21:9 for the header and 3:2
+for search; the wordmark and the gameplay moment sit inside both crops. Skip
+it entirely and the store falls back to screenshots.
+
 ## Connect checklist
 - Category: Games > Puzzle (secondary: Casual)
 - Age rating: answer "None" to everything -> 4+
