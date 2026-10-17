@@ -53,9 +53,11 @@ From the maker of Tidal Orbit.
 `node tools/screenshots.js` (poses real levels mid-flight with the solver's
 taps, adds a caption, crops to size). Upload in order 1-5, one size per row
 in Connect's Media Manager (each row only accepts its own dimensions):
-- `6.9-*.png` (1320x2868) -> row **iPhone with Dynamic Island (large display)**. Required.
-- `6.5-*.png` (1284x2778) -> row **iPhone with Face ID (large display)**. Optional;
-  Connect scales the Dynamic Island set for every other iPhone if left empty.
+- `6.3-*.png` (1206x2622) -> row **iPhone with Dynamic Island (medium display)**. Required.
+- `6.9-*.png` (1320x2868) -> row **iPhone with Dynamic Island (large display)**. Optional.
+- `6.5-*.png` (1284x2778) -> row **iPhone with Face ID (large display)**. Optional.
+Rows left empty get scaled copies of what you did upload. `jpg/` holds the
+same images as JPEG in case the uploader rejects a PNG.
 
 ## Connect checklist
 - Category: Games > Puzzle (secondary: Casual)

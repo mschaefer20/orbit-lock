@@ -1,6 +1,7 @@
 /* App Store screenshots: poses the real game mid-flight (using the solver's
    tap sequence), adds a caption, and renders in headless Edge/Chrome at the
-   exact pixel sizes App Store Connect wants (6.9" 1320x2868, 6.5" 1284x2778).
+   exact pixel sizes App Store Connect wants: 6.3" 1206x2622 (the required
+   "Dynamic Island (medium display)" row), 6.9" 1320x2868, 6.5" 1284x2778.
    Output: store/screenshots/<size>-<n>-<name>.png
    Usage: node tools/screenshots.js [path-to-browser]
    Headless Chromium won't go narrower than ~500 css px, so the page is laid
@@ -14,7 +15,7 @@ const SHOTS = [   // name, query for the harness, caption (HTML)
   ["bouncy", "lvl=305&taps=5,6,30&t=2.6&done=12", "Only the taps you need.<br>Not one more."],
   ["wrap", "lvl=403&taps=0,10,12&t=2.2&done=12", "New twists keep coming.<br><b>Warp. Bounce. Wrap.</b>"],
 ];
-const SIZES = [["6.9", 440, 956], ["6.5", 428, 926]];   // css px; rendered at 3x
+const SIZES = [["6.3", 402, 874], ["6.9", 440, 956], ["6.5", 428, 926]];   // css px; rendered at 3x -> 1206x2622, 1320x2868, 1284x2778
 const DPR = 3;
 
 const CANDIDATES = [process.argv[2], "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
